@@ -116,29 +116,43 @@ const createInterfaceInfo = (deviceId) => ({
 });
 
 // --- MODIFIED & CORRECTED ---
-// The `targetInterface` argument has been removed as it was unused.
-const createTenGigLink = (sourceDevice, targetDevice, sourceInterface) => ({
-  id: `link-10g-${faker.string.alphanumeric(8)}`,
-  source: sourceDevice.hostname,
-  target: targetDevice.hostname,
-  network_type_id: sourceDevice.network_type_id,
-  ip: faker.internet.ip(),
-  status: faker.helpers.arrayElement(["up", "down", "issue"]),
+// This function now creates and returns an ARRAY of 1 to 3 "parallel" links
+// between the same source and target devices.
+const createTenGigLink = (sourceDevice, targetDevice, sourceInterface) => {
+  const links = [];
+  // Decide to create 1, 2, or 3 links for this source/target pair
+  const linkCount = faker.number.int({ min: 1, max: 3 });
 
-  // --- NEW FIELDS ---
-  // We'll use the source interface's data for the link's properties.
-  // Using the nullish coalescing operator `??` for numbers to correctly handle 0.
-  physicalStatus: sourceInterface.physical_status || "N/A",
-  protocolStatus: sourceInterface.protocol_status || "N/A",
-  MPLS: sourceInterface.mpls || "N/A",
-  OSPF: sourceInterface.ospf || "N/A",
-  Bandwidth: sourceInterface.bandwidth ?? "N/A",
-  Description: sourceInterface.description || "N/A",
-  MediaType: sourceInterface.media_type || "N/A",
-  CDP: sourceInterface.cdp || "N/A",
-  TX: sourceInterface.tx ?? "N/A",
-  RX: sourceInterface.rx ?? "N/A",
-});
+  // Define the properties that will be THE SAME for all parallel links
+  const commonProperties = {
+    source: sourceDevice.hostname,
+    target: targetDevice.hostname,
+    network_type_id: sourceDevice.network_type_id,
+    ip: faker.internet.ip(),
+    physicalStatus: sourceInterface.physical_status || "N/A",
+    protocolStatus: sourceInterface.protocol_status || "N/A",
+    MPLS: sourceInterface.mpls || "N/A",
+    OSPF: sourceInterface.ospf || "N/A",
+    Bandwidth: sourceInterface.bandwidth ?? "N/A",
+    Description: sourceInterface.description || "N/A",
+    MediaType: sourceInterface.media_type || "N/A",
+    CDP: sourceInterface.cdp || "N/A",
+    TX: sourceInterface.tx ?? "N/A",
+    RX: sourceInterface.rx ?? "N/A",
+  };
+
+  // Create the individual links
+  for (let i = 0; i < linkCount; i++) {
+    links.push({
+      ...commonProperties,
+      // Define properties that are UNIQUE for each parallel link
+      id: `link-10g-${faker.string.alphanumeric(8)}`,
+      status: faker.helpers.arrayElement(["up", "down", "issue"]),
+    });
+  }
+
+  return links;
+};
 
 // --- Main Export Function ---
 
@@ -205,16 +219,13 @@ export const generateAllDummyData = () => {
       if (deviceMapByEnding.has(end1) && deviceMapByEnding.has(end2)) {
         const sourceDevice = deviceMapByEnding.get(end1);
         const targetDevice = deviceMapByEnding.get(end2);
-
-        // We only need an interface from the source device to enrich the link data
         const sourceInterfaces = deviceInfo[sourceDevice.id];
 
-        // The check for targetInterfaces is removed as it's not needed for link creation
         if (sourceInterfaces?.length > 0) {
           const sourceInterface = faker.helpers.arrayElement(sourceInterfaces);
+          // We use the spread operator (...) because createTenGigLink now returns an array of links.
           sameSiteLinks.push(
-            // The call to createTenGigLink now only passes the source interface
-            createTenGigLink(sourceDevice, targetDevice, sourceInterface)
+            ...createTenGigLink(sourceDevice, targetDevice, sourceInterface)
           );
         }
       }
@@ -243,14 +254,13 @@ export const generateAllDummyData = () => {
         createdPairs.has(pairKey)
       );
 
-      // Only need the source interface
       const sourceInterfaces = deviceInfo[sourceDevice.id];
 
       if (sourceInterfaces?.length > 0) {
         const sourceInterface = faker.helpers.arrayElement(sourceInterfaces);
+        // We use the spread operator (...) here as well to flatten the returned array of links.
         differentSiteLinks.push(
-          // The call to createTenGigLink now only passes the source interface
-          createTenGigLink(sourceDevice, targetDevice, sourceInterface)
+          ...createTenGigLink(sourceDevice, targetDevice, sourceInterface)
         );
         createdPairs.add(pairKey);
       }
