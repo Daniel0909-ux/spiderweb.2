@@ -181,7 +181,7 @@ function AppLayout() {
           <h1
             className={`text-2xl shrink-0 ${
               isFullscreen
-                ? "font-extrabold text-white tracking-wide" // <-- This line is changed
+                ? "font-extrabold text-gray-900 dark:text-white tracking-wide"
                 : "font-semibold text-gray-900 dark:text-white"
             }`}
           >

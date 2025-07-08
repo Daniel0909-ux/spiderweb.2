@@ -63,8 +63,8 @@ export function Sidebar({ currentPage, collapsed, setCollapsed }) {
       {/* --- HEADER SECTION (THIS IS WHERE THE CHANGE IS) --- */}
       <div className="flex items-center justify-between p-4 border-b dark:border-gray-700 shrink-0">
         {!collapsed && (
-          // The plain text div is replaced with this styled h1
-          <h1 className="text-2xl font-extrabold text-white tracking-wide">
+          // THIS IS THE CORRECTED LINE
+          <h1 className="text-2xl font-extrabold text-gray-800 dark:text-white tracking-wide">
             SPIDERWEB
           </h1>
         )}

@@ -14,13 +14,6 @@ export function useDashboardLogic({ isAppFullscreen, isSidebarCollapsed }) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  /**
-   * Determines the active tab value based on the current URL path.
-   * This is used to initialize the state and to synchronize the UI
-   * when the user navigates using browser back/forward buttons.
-   * @param {string} path - The current location.pathname.
-   * @returns {string} The corresponding tab value.
-   */
   const getTabValueFromPath = (path) => {
     if (path.startsWith("/l-chart")) return "l_network";
     if (path.startsWith("/p-chart")) return "p_network";
