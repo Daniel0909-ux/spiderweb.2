@@ -3,13 +3,13 @@ import {
   createSelector,
   createAsyncThunk,
 } from "@reduxjs/toolkit";
-//import { initialData } from "../initialData";
+import { initialData } from "../initialData";
 
-import { api } from "../../services/apiServices"; // <-- 1. Import the real api
+//import { api } from "../../services/apiServices"; // <-- 1. Import the real api
 
 // --- MOCK API: Mimics the real API call using dummy data ---
 // This isolates the data source, preparing it for the real API.
-/*const mockApi = {
+const mockApi = {
   getCoreDevices: async () => {
     // Simulate a network delay
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -21,7 +21,7 @@ import { api } from "../../services/apiServices"; // <-- 1. Import the real api
       deviceInfo: initialData.deviceInfo,
     };
   },
-};*/
+};
 
 // --- ASYNC THUNK: For fetching the devices and their info (SIMPLIFIED) ---
 export const fetchDevices = createAsyncThunk(
@@ -29,10 +29,10 @@ export const fetchDevices = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       console.log("[Thunk] Starting fetchDevices (single API call)...");
-      //const response = await mockApi.getCoreDevices();
+      const response = await mockApi.getCoreDevices();
 
       // --- ONLY ONE API CALL IS NEEDED ---
-      const response = await api.getCoreDevices();
+      //const response = await api.getCoreDevices();
       // This assumes api.getCoreDevices() returns an object like:
       // { devices: [ ... ], deviceInfo: { ... } }
 
