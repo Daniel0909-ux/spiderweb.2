@@ -1,33 +1,30 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useMemo, useCallback } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { faker } from "@faker-js/faker";
 
 // --- Redux Imports ---
-// Selectors for raw data sources
 import { selectAllSites } from "../redux/slices/sitesSlice";
 import { selectAllTenGigLinks } from "../redux/slices/tenGigLinksSlice";
 import { selectAllDevices } from "../redux/slices/devicesSlice";
-// Selector and Action for the shared "favorites" state
 import {
   selectFavoriteIds,
-  toggleFavoriteLink, // <-- FIX #1: Use the correct name for the exported thunk
-} from "../redux/slices/favoritesSlice"; // <-- Make sure the file extension is correct (.js or .jsx)
+  toggleFavoriteLink,
+} from "../redux/slices/favoritesSlice";
 
 /**
  * The "Single Source of Truth" Hook for all network connections.
- * ... (rest of the JSDoc)
  */
 export function useInterfaceData() {
-  // Get the dispatch function to send actions to the Redux store
   const dispatch = useDispatch();
 
-  // --- Step 1: Get all data from the global Redux store using selectors ---
-  const allSites = useSelector(selectAllSites);
-  const allTenGigLinks = useSelector(selectAllTenGigLinks);
-  const allDevices = useSelector(selectAllDevices);
-
-  // This gets the favorite IDs as a plain array, e.g., ['id-1', 'id-2']
-  const favoriteIds = useSelector(selectFavoriteIds);
+  // --- THIS IS THE FIX: Provide a fallback empty array for each selector ---
+  // This ensures that even if the state is temporarily missing during a re-render,
+  // the variables will be empty arrays `[]` instead of `undefined`.
+  const allSites = useSelector(selectAllSites) || [];
+  const allTenGigLinks = useSelector(selectAllTenGigLinks) || [];
+  const allDevices = useSelector(selectAllDevices) || [];
+  const favoriteIds = useSelector(selectFavoriteIds) || [];
 
   // --- Step 2: Create efficient lookup maps (memoized for performance) ---
   const deviceMap = useMemo(
@@ -35,15 +32,13 @@ export function useInterfaceData() {
     [allDevices]
   );
 
-  // --- NEW: Create a clean list of device names for the filter dropdown ---
   const deviceFilterOptions = useMemo(() => {
-    // Get hostnames from the source of truth: allDevices
     const hostnames = allDevices.map((device) => device.hostname);
-    // Add the "all" option and sort the list for a clean UI
     return ["all", ...hostnames.sort()];
   }, [allDevices]);
 
   // --- Step 3: Transform, combine, and merge all data (the core logic) ---
+  // This code will now work safely because `allSites` and `allTenGigLinks` are guaranteed to be arrays.
   const interfaces = useMemo(() => {
     // --- A. Transform Site Connections into the common format ---
     const siteConnections = allSites.map((site) => {
@@ -53,7 +48,7 @@ export function useInterfaceData() {
         deviceName: device?.hostname || "Unknown Device",
         interfaceName: `Port ${site.interface_id}`,
         description: `Connection to site: ${site.site_name_english}`,
-        status: "Up",
+        status: "Up", // This might need to come from real data later
         trafficIn: `${faker.number.int({ min: 1, max: 800 })} Mbps`,
         trafficOut: `${faker.number.int({ min: 1, max: 800 })} Mbps`,
         errors: {
@@ -71,7 +66,7 @@ export function useInterfaceData() {
         id: link.id,
         deviceName: `${link.source} <-> ${link.target}`,
         interfaceName: `10G Inter-Core Link`,
-        description: `Inter-site trunk (${link.bandwidth})`,
+        description: `Inter-site trunk (${link.bandwidth || "N/A"})`,
         status: formattedStatus === "Issue" ? "Down" : formattedStatus,
         trafficIn: `${faker.number.float({
           min: 1,
@@ -103,7 +98,6 @@ export function useInterfaceData() {
   // --- Step 4: Create a stable function to handle user actions ---
   const handleToggleFavorite = useCallback(
     (linkId) => {
-      // FIX #2: Dispatch the async thunk with the correct name
       dispatch(toggleFavoriteLink(linkId));
     },
     [dispatch]

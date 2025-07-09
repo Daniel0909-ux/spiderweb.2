@@ -5,6 +5,7 @@ import Cookies from "js-cookie";
 import { initialData } from "../initialData";
 
 // --- 1. Import the individual data-fetching thunks from other slices ---
+import { fetchNetTypes } from "./netTypesSlice";
 import { fetchCorePikudim } from "./corePikudimSlice";
 import { fetchDevices } from "./devicesSlice";
 import { fetchSites } from "./sitesSlice";
@@ -42,6 +43,7 @@ export const fetchInitialData = createAsyncThunk(
   async (_, { dispatch }) => {
     // Dispatch all data fetches concurrently. Redux Toolkit handles this efficiently.
     // The status of each fetch is managed within its own respective slice.
+    dispatch(fetchNetTypes());
     dispatch(fetchCorePikudim());
     dispatch(fetchDevices());
     dispatch(fetchSites());

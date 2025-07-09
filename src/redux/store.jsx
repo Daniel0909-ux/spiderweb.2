@@ -25,21 +25,18 @@ const appReducer = combineReducers({
   alerts: alertsReducer,
 });
 
-// 2. Create a "root" reducer that delegates to the appReducer, but handles the logout case
+// Create a "root" reducer that delegates to the appReducer
 const rootReducer = (state, action) => {
-  // When the logout action is dispatched, reset the state to its initial value
   if (action.type === logout.type) {
-    // By passing `undefined` as the state, `appReducer` will return the initial state for all slices.
-    // We keep the `auth` and `realtime` state to avoid a flash of a logged-out screen before redirecting.
-    // Or, more simply, reset everything:
-    state = undefined;
+    return appReducer(undefined, action);
   }
+
+  // For all other actions, just pass them through to the appReducer
   return appReducer(state, action);
 };
 
 export const store = configureStore({
-  // 3. Use the new rootReducer
-  reducer: rootReducer,
+  reducer: rootReducer, // Use the new rootReducer
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: false,

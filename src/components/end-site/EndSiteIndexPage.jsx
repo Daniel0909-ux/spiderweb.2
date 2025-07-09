@@ -1,5 +1,7 @@
+// src/components/end-site/EndSiteIndexPage.jsx
+
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
@@ -7,10 +9,16 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { selectAllSites } from "../../redux/slices/sitesSlice";
 import { selectAllDevices } from "../../redux/slices/devicesSlice";
 import { selectAllPikudim } from "../../redux/slices/corePikudimSlice";
+import { fetchInitialData } from "../../redux/slices/authSlice";
 
 // --- UI & Feedback Components ---
 import { GridSkeleton } from "../ui/feedback/GridSkeleton";
 import { ErrorMessage } from "../ui/feedback/ErrorMessage";
+
+// --- NEW: Status Selectors ---
+const selectSitesStatus = (state) => state.sites.status;
+const selectDevicesStatus = (state) => state.devices.status;
+const selectPikudimStatus = (state) => state.corePikudim.status;
 
 // SiteCard component remains unchanged
 const SiteCard = ({ siteGroup, deviceMap, pikudMap, onClick }) => {
@@ -55,16 +63,19 @@ const SiteCard = ({ siteGroup, deviceMap, pikudMap, onClick }) => {
 
 export default function EndSiteIndexPage() {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const [searchTerm, setSearchTerm] = useState("");
   const parentRef = useRef(null);
 
   // --- Get Data and Status from Redux ---
   const allSites = useSelector(selectAllSites);
-  const sitesStatus = useSelector((state) => state.sites.status);
   const allDevices = useSelector(selectAllDevices);
   const allPikudim = useSelector(selectAllPikudim);
+  const sitesStatus = useSelector(selectSitesStatus);
+  const devicesStatus = useSelector(selectDevicesStatus);
+  const pikudimStatus = useSelector(selectPikudimStatus);
 
-  // --- Memoized data processing ---
+  // --- Memoized data processing (no changes) ---
   const deviceMap = useMemo(
     () => new Map(allDevices.map((d) => [d.id, d])),
     [allDevices]
@@ -73,7 +84,6 @@ export default function EndSiteIndexPage() {
     () => new Map(allPikudim.map((p) => [p.id, p])),
     [allPikudim]
   );
-
   const groupedSites = useMemo(() => {
     return allSites.reduce((acc, site) => {
       const key = site.site_name_english;
@@ -82,7 +92,6 @@ export default function EndSiteIndexPage() {
       return acc;
     }, {});
   }, [allSites]);
-
   const filteredSiteGroups = useMemo(() => {
     const allGroups = Object.values(groupedSites);
     if (!searchTerm) return allGroups;
@@ -98,24 +107,26 @@ export default function EndSiteIndexPage() {
     });
   }, [groupedSites, searchTerm]);
 
+  // --- Event Handlers (no changes) ---
   const handleSiteClick = (siteGroup) => {
     const navId = encodeURIComponent(siteGroup[0].site_name_english);
     navigate(`/sites/site/${navId}`, { state: { siteGroupData: siteGroup } });
   };
 
-  // --- VIRTUALIZATION LOGIC: Row-based approach ---
-  const [columnCount, setColumnCount] = useState(5);
+  const handleRetry = () => {
+    dispatch(fetchInitialData());
+  };
 
+  // --- Virtualization Logic (no changes) ---
+  const [columnCount, setColumnCount] = useState(5);
   useEffect(() => {
     const updateColumnCount = () => {
-      if (window.innerWidth >= 1280)
-        setColumnCount(5); // Corresponds to Tailwind's xl
-      else if (window.innerWidth >= 1024) setColumnCount(4); // lg
-      else if (window.innerWidth >= 768) setColumnCount(3); // md
-      else if (window.innerWidth >= 640) setColumnCount(2); // sm
+      if (window.innerWidth >= 1280) setColumnCount(5);
+      else if (window.innerWidth >= 1024) setColumnCount(4);
+      else if (window.innerWidth >= 768) setColumnCount(3);
+      else if (window.innerWidth >= 640) setColumnCount(2);
       else setColumnCount(1);
     };
-
     updateColumnCount();
     window.addEventListener("resize", updateColumnCount);
     return () => window.removeEventListener("resize", updateColumnCount);
@@ -124,18 +135,32 @@ export default function EndSiteIndexPage() {
   const rowVirtualizer = useVirtualizer({
     count: Math.ceil(filteredSiteGroups.length / columnCount),
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 200, // Still important for initial render and scrollbar size
+    estimateSize: () => 200,
     overscan: 5,
-    // Add measurement options for more stable measuring
     measureElement: (element) => element.getBoundingClientRect().height,
   });
 
+  // --- NEW: Resilient Rendering Logic ---
   const renderContent = () => {
-    if (sitesStatus === "loading") {
+    const isLoading =
+      sitesStatus === "loading" ||
+      devicesStatus === "loading" ||
+      pikudimStatus === "loading";
+    const hasError =
+      sitesStatus === "failed" ||
+      devicesStatus === "failed" ||
+      pikudimStatus === "failed";
+
+    if (isLoading) {
       return <GridSkeleton count={15} />;
     }
-    if (sitesStatus === "failed") {
-      return <ErrorMessage message="Failed to load site data." />;
+    if (hasError) {
+      return (
+        <ErrorMessage
+          onRetry={handleRetry}
+          message="Failed to load site data."
+        />
+      );
     }
     if (filteredSiteGroups.length === 0) {
       return (
@@ -147,6 +172,7 @@ export default function EndSiteIndexPage() {
       );
     }
 
+    // This is the successful render path
     return (
       <div ref={parentRef} className="w-full h-full overflow-y-auto pr-2">
         <div
@@ -176,17 +202,13 @@ export default function EndSiteIndexPage() {
             }
 
             return (
-              // --- THIS IS THE CORRECTED STRUCTURE ---
               <div
                 key={virtualRow.key}
                 ref={rowVirtualizer.measureElement}
                 data-index={virtualRow.index}
                 className="absolute top-0 left-0 w-full"
-                style={{
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
+                style={{ transform: `translateY(${virtualRow.start}px)` }}
               >
-                {/* This inner div handles the grid layout and its height determines the parent's height */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5 p-1">
                   {cardsInRow}
                 </div>

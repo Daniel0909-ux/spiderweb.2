@@ -5,13 +5,20 @@ import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import NetworkVisualizer from "../../components/chart/NetworkVisualizer";
 import LinkDetailTabs from "../../components/shared/LinkDetailTabs";
-import { selectPikudimByTypeId } from "../../redux/slices/corePikudimSlice";
-import { selectDevicesByTypeId } from "../../redux/slices/devicesSlice";
-import { selectLinksByTypeId } from "../../redux/slices/tenGigLinksSlice";
 import ToggleDetailButton from "../../components/chart/ToggleDetailButton";
 import { fetchInitialData } from "../../redux/slices/authSlice";
 
-// Import feedback components
+// --- Data Selectors ---
+import { selectPikudimByTypeId } from "../../redux/slices/corePikudimSlice";
+import { selectDevicesByTypeId } from "../../redux/slices/devicesSlice";
+import { selectLinksByTypeId } from "../../redux/slices/tenGigLinksSlice";
+
+// --- NEW: Import Status Selectors ---
+const selectPikudimStatus = (state) => state.corePikudim.status;
+const selectDevicesStatus = (state) => state.devices.status;
+const selectLinksStatus = (state) => state.tenGigLinks.status;
+
+// --- Feedback Components ---
 import { LoadingSpinner } from "../../components/ui/feedback/LoadingSpinner";
 import { ErrorMessage } from "../../components/ui/feedback/ErrorMessage";
 
@@ -35,17 +42,17 @@ const NetworkVisualizerWrapper = ({ theme }) => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  // Get data fetching status from Redux
-  const pikudimStatus = useSelector((state) => state.corePikudim.status);
-  const devicesStatus = useSelector((state) => state.devices.status);
-  const linksStatus = useSelector((state) => state.tenGigLinks.status);
+  // --- NEW: Get the status of each required slice ---
+  const pikudimStatus = useSelector(selectPikudimStatus);
+  const devicesStatus = useSelector(selectDevicesStatus);
+  const linksStatus = useSelector(selectLinksStatus);
 
-  // Existing state and selectors...
+  // Existing UI state (no change)
   const [openLinkTabs, setOpenLinkTabs] = useState([]);
   const [activeLinkTabId, setActiveLinkTabId] = useState(null);
   const [showDetailedLinks, setShowDetailedLinks] = useState(false);
 
-  // --- These selectors correctly get the filtered data ---
+  // Data selectors for L-Chart (typeId: 1)
   const pikudim = useSelector((state) => selectPikudimByTypeId(state, 1));
   const allDevicesForType = useSelector((state) =>
     selectDevicesByTypeId(state, 1)
@@ -103,7 +110,7 @@ const NetworkVisualizerWrapper = ({ theme }) => {
     return { nodes: transformedNodes, links: transformedLinks };
   }, [pikudim, allDevicesForType, linksRaw]);
 
-  // All handlers are unchanged
+  // All handlers are unchanged...
   const handleZoneClick = useCallback(
     (zoneId) => {
       navigate(`zone/${zoneId}`);
@@ -164,27 +171,38 @@ const NetworkVisualizerWrapper = ({ theme }) => {
 
   const handleRetry = () => dispatch(fetchInitialData());
 
-  // --- Loading and Error Rendering Logic ---
+  // --- NEW: Component-specific loading, error, and empty state logic ---
   const isLoading =
     pikudimStatus === "loading" ||
     devicesStatus === "loading" ||
     linksStatus === "loading";
+
   const hasError =
     pikudimStatus === "failed" ||
     devicesStatus === "failed" ||
     linksStatus === "failed";
 
-  // This state is derived after loading/errors are handled
   const isDataEmpty = !isLoading && !hasError && graphData.nodes.length === 0;
 
+  // The AppInitializer already handles the very first load, but this
+  // will catch subsequent re-fetches triggered within this component.
   if (isLoading) {
     return <LoadingSpinner text="Building L-Chart..." />;
   }
 
+  // THIS IS THE CRITICAL FIX. If any of the required slices fail, this
+  // component will render an error message instead of crashing.
   if (hasError) {
-    return <ErrorMessage onRetry={handleRetry} />;
+    return (
+      <ErrorMessage
+        onRetry={handleRetry}
+        message="Could not load the data needed for the L-Chart. Other parts of the application may still be functional."
+      />
+    );
   }
 
+  // If loading and error states are clear, but there's still no data,
+  // it means the API returned empty arrays for one or more critical slices.
   if (isDataEmpty) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center p-4 text-center">
@@ -198,7 +216,7 @@ const NetworkVisualizerWrapper = ({ theme }) => {
     );
   }
 
-  // --- Original component return ---
+  // --- Original component return for a successful data load ---
   return (
     <div className="w-full h-full flex flex-col">
       {openLinkTabs.length > 0 && (
@@ -220,7 +238,7 @@ const NetworkVisualizerWrapper = ({ theme }) => {
           theme={theme}
         />
         <NetworkVisualizer
-          key={theme}
+          key={theme} // Keep this key for theme changes
           data={graphData}
           theme={theme}
           showDetailedLinks={showDetailedLinks}

@@ -3,13 +3,13 @@ import {
   createSelector,
   createAsyncThunk,
 } from "@reduxjs/toolkit";
-import { initialData } from "../initialData";
+//import { initialData } from "../initialData";
 
-//import { api } from "../../services/apiServices"; // <-- 1. Import the real api
+import { api } from "../../services/apiServices"; // <-- 1. Import the real api
 
 // --- MOCK API: Mimics the real API call using dummy data ---
 // This isolates the data source, preparing it for the real API.
-const mockApi = {
+/*const mockApi = {
   getCoreDevices: async () => {
     // Simulate a network delay
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -21,38 +21,27 @@ const mockApi = {
       deviceInfo: initialData.deviceInfo,
     };
   },
-};
+};*/
 
-// --- ASYNC THUNK: For fetching the devices and their info ---
+// --- ASYNC THUNK: For fetching the devices and their info (SIMPLIFIED) ---
 export const fetchDevices = createAsyncThunk(
   "devices/fetchDevices",
   async (_, { rejectWithValue }) => {
     try {
-      // LATER: When you're ready for the real API, you will change this line to:
-      // const response = await api.getCoreDevices();
-      // And you might need another call for deviceInfo if it's a separate endpoint.
-      const response = await mockApi.getCoreDevices();
+      console.log("[Thunk] Starting fetchDevices (single API call)...");
+      //const response = await mockApi.getCoreDevices();
+
+      // --- ONLY ONE API CALL IS NEEDED ---
+      const response = await api.getCoreDevices();
+      // This assumes api.getCoreDevices() returns an object like:
+      // { devices: [ ... ], deviceInfo: { ... } }
+
+      console.log("[Thunk] Successfully fetched devices data:", response);
+
+      // The response is already in the correct format, so just return it.
       return response;
-
-      // Step 1: Fetch the list of all core devices
-      //const devices = await api.getCoreDevices();
-
-      /*// Step 2: For each device, fetch its detailed interface info
-      const deviceInfoPromises = devices.map(device =>
-        api.getDeviceInfo(device.id)
-      );
-      const allDeviceInfoArrays = await Promise.all(deviceInfoPromises);
-      
-      // Step 3: Combine the device info arrays into a single map object
-      const deviceInfo = allDeviceInfoArrays.reduce((acc, infoArray, index) => {
-        const deviceId = devices[index].id;
-        acc[deviceId] = infoArray;
-        return acc;
-      }, {});
-
-      // Step 4: Return the combined payload, matching the slice's expected shape
-      return { devices, deviceInfo };*/
     } catch (error) {
+      console.error("[Thunk] ERROR in fetchDevices:", error.response || error);
       return rejectWithValue(error.message);
     }
   }
@@ -81,10 +70,18 @@ const devicesSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchDevices.pending, (state) => {
+        console.log(
+          "[Redux] fetchDevices fulfilled. state.Payload:",
+          state.payload
+        );
         state.status = "loading";
         state.error = null;
       })
       .addCase(fetchDevices.fulfilled, (state, action) => {
+        console.log(
+          "[Redux] fetchDevices fulfilled. action.Payload:",
+          action.payload
+        );
         state.status = "succeeded";
         // Populate the state with the fetched data
         state.items = action.payload.devices;

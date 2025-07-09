@@ -1,15 +1,24 @@
+// src/components/NetworkVisualizer5Wrapper.jsx
+
 import React, { useCallback, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import NetworkVisualizer5 from "../../components/chart/NetworkVisualizer5";
 import LinkDetailTabs from "../../components/shared/LinkDetailTabs";
-import { selectPikudimByTypeId } from "../../redux/slices/corePikudimSlice";
-import { selectDevicesByTypeId } from "../../redux/slices/devicesSlice";
-import { selectLinksByTypeId } from "../../redux/slices/tenGigLinksSlice";
 import ToggleDetailButton from "../../components/chart/ToggleDetailButton";
 import { fetchInitialData } from "../../redux/slices/authSlice";
 
-// Import reusable feedback components
+// --- Data Selectors ---
+import { selectPikudimByTypeId } from "../../redux/slices/corePikudimSlice";
+import { selectDevicesByTypeId } from "../../redux/slices/devicesSlice";
+import { selectLinksByTypeId } from "../../redux/slices/tenGigLinksSlice";
+
+// --- NEW: Import Status Selectors ---
+const selectPikudimStatus = (state) => state.corePikudim.status;
+const selectDevicesStatus = (state) => state.devices.status;
+const selectLinksStatus = (state) => state.tenGigLinks.status;
+
+// --- Feedback Components ---
 import { LoadingSpinner } from "../../components/ui/feedback/LoadingSpinner";
 import { ErrorMessage } from "../../components/ui/feedback/ErrorMessage";
 
@@ -33,17 +42,17 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  // Get data fetching status from Redux
-  const pikudimStatus = useSelector((state) => state.corePikudim.status);
-  const devicesStatus = useSelector((state) => state.devices.status);
-  const linksStatus = useSelector((state) => state.tenGigLinks.status);
+  // --- NEW: Get the status of each required slice ---
+  const pikudimStatus = useSelector(selectPikudimStatus);
+  const devicesStatus = useSelector(selectDevicesStatus);
+  const linksStatus = useSelector(selectLinksStatus);
 
   // Local UI state
   const [openLinkTabs, setOpenLinkTabs] = useState([]);
   const [activeLinkTabId, setActiveLinkTabId] = useState(null);
   const [showDetailedLinks, setShowDetailedLinks] = useState(false);
 
-  // Selectors for P-Chart data (typeId: 2)
+  // --- IMPORTANT: Selectors use typeId: 2 for P-Chart data ---
   const pikudim = useSelector((state) => selectPikudimByTypeId(state, 2));
   const allDevicesForType = useSelector((state) =>
     selectDevicesByTypeId(state, 2)
@@ -162,11 +171,12 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
 
   const handleRetry = () => dispatch(fetchInitialData());
 
-  // --- NEW: Loading, Error, and Empty State Rendering Logic ---
+  // --- NEW: Component-specific derived states for rendering logic ---
   const isLoading =
     pikudimStatus === "loading" ||
     devicesStatus === "loading" ||
     linksStatus === "loading";
+
   const hasError =
     pikudimStatus === "failed" ||
     devicesStatus === "failed" ||
@@ -174,14 +184,22 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
 
   const isDataEmpty = !isLoading && !hasError && graphData.nodes.length === 0;
 
+  // Render loading state
   if (isLoading) {
     return <LoadingSpinner text="Building P-Chart..." />;
   }
 
+  // Render error state if any dependency fails
   if (hasError) {
-    return <ErrorMessage onRetry={handleRetry} />;
+    return (
+      <ErrorMessage
+        onRetry={handleRetry}
+        message="Could not load the data needed for the P-Chart. Other parts of the application may still be functional."
+      />
+    );
   }
 
+  // Render empty state if data loads successfully but is empty
   if (isDataEmpty) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center p-4 text-center">

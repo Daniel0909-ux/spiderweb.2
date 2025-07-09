@@ -1,12 +1,18 @@
+// src/components/auth/AppInitializer.jsx
+
 import React, { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { createSelector } from "@reduxjs/toolkit";
-import { fetchInitialData } from "../../redux/slices/authSlice";
+import {
+  fetchInitialData,
+  selectAuthStatus,
+  selectAuthError,
+} from "../../redux/slices/authSlice";
 import { startConnecting } from "../../redux/slices/realtimeSlice";
-import { fetchAllAlerts } from "../../redux/slices/alertsSlice"; // <-- NEW: Import alert thunk
+import { fetchAllAlerts } from "../../redux/slices/alertsSlice";
 import { Loader2, AlertTriangle } from "lucide-react";
 
-// Memoized selector to prevent unnecessary re-renders
+// Selectors for core data status (no changes here)
 const selectPikudimStatus = (state) => state.corePikudim.status;
 const selectDevicesStatus = (state) => state.devices.status;
 const selectLinksStatus = (state) => state.tenGigLinks.status;
@@ -19,67 +25,62 @@ const selectCoreDataStatus = createSelector(
     selectLinksStatus,
     selectSitesStatus,
   ],
-  (pikudim, devices, links, sites) => ({
-    pikudim,
-    devices,
-    links,
-    sites,
-  })
+  (pikudim, devices, links, sites) => ({ pikudim, devices, links, sites })
 );
 
 export function AppInitializer({ children }) {
   const dispatch = useDispatch();
+
+  const authStatus = useSelector(selectAuthStatus);
+  const authError = useSelector(selectAuthError);
   const dataStatus = useSelector(selectCoreDataStatus);
 
-  // Derived state to determine the overall status
-  const isIdle = Object.values(dataStatus).every((s) => s === "idle");
-  const isSuccessful = Object.values(dataStatus).every(
+  const isAuthIdle = authStatus === "idle";
+  const isAuthLoading = authStatus === "loading";
+  const isAuthFailed = authStatus === "failed";
+
+  const isInitialDataLoadFinished = Object.values(dataStatus).every(
+    (s) => s === "succeeded" || s === "failed"
+  );
+  const hasSomeDataSucceeded = Object.values(dataStatus).some(
     (s) => s === "succeeded"
   );
-  const isLoading = Object.values(dataStatus).some((s) => s === "loading");
-  const hasFailed = Object.values(dataStatus).some((s) => s === "failed");
 
-  // Effect for fetching initial data and starting real-time connection
+  // Effect for fetching initial data (no change)
   useEffect(() => {
-    if (isIdle) {
+    if (isAuthIdle) {
       dispatch(fetchInitialData());
     }
+  }, [isAuthIdle, dispatch]);
 
-    if (isSuccessful) {
-      dispatch(startConnecting());
-    }
-  }, [isIdle, isSuccessful, dispatch]);
-
-  // --- NEW: Effect for periodic alert polling ---
+  // Effect for starting real-time connection and alerts polling (no change)
   useEffect(() => {
     let intervalId;
 
-    // Start polling only when the core application data has successfully loaded.
-    if (isSuccessful) {
-      // Set up the interval to dispatch the fetch action every 30 seconds.
+    if (hasSomeDataSucceeded) {
+      dispatch(startConnecting());
       intervalId = setInterval(() => {
         dispatch(fetchAllAlerts());
-      }, 30000); // 30,000 milliseconds = 30 seconds
+      }, 30000);
     }
 
-    // This is a cleanup function. React runs it when the component unmounts
-    // or when the 'isSuccessful' dependency changes before re-running the effect.
-    // This prevents memory leaks and duplicate intervals.
     return () => {
       if (intervalId) {
         clearInterval(intervalId);
       }
     };
-  }, [isSuccessful, dispatch]); // This effect depends on the success state and dispatch function
+  }, [hasSomeDataSucceeded, dispatch]);
 
+  // THIS FUNCTION IS NOW USED
   const handleRetry = () => {
+    // This action will re-trigger the entire data loading process.
     dispatch(fetchInitialData());
   };
 
   // --- RENDERING LOGIC ---
 
-  // Display a loading screen while fetching initial data
-  if (isLoading || isIdle) {
+  // Loading screen (no change)
+  if (isAuthLoading || !isInitialDataLoadFinished) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-gray-100 dark:bg-gray-950">
         <div className="flex flex-col items-center gap-4 text-center p-4">
@@ -95,19 +96,20 @@ export function AppInitializer({ children }) {
     );
   }
 
-  // Display an error screen if any of the initial fetches fail
-  if (hasFailed) {
+  // Fatal error screen (NOW WITH RETRY BUTTON)
+  if (isAuthFailed) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-gray-100 dark:bg-gray-950">
         <div className="flex flex-col items-center gap-4 text-center p-4">
           <AlertTriangle className="h-16 w-16 text-red-500" />
           <h1 className="text-2xl font-bold text-red-600 dark:text-red-400 mt-4">
-            Failed to Load Application Data
+            Authentication Error
           </h1>
           <p className="text-gray-600 dark:text-gray-400 max-w-md">
-            An error occurred while fetching critical network information.
-            Please check your connection and try again.
+            {authError ||
+              "Could not validate your session. Please try logging in again."}
           </p>
+          {/* --- THE FIX IS HERE --- */}
           <button
             onClick={handleRetry}
             className="mt-6 px-6 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition-colors"
@@ -119,6 +121,6 @@ export function AppInitializer({ children }) {
     );
   }
 
-  // Once everything is loaded, render the main application
+  // If we reach this point, render the main application.
   return children;
 }
