@@ -46,7 +46,6 @@ const normalizeNetTypesApiResponse = (apiResponse) => {
 
 // --- ENTITY ADAPTER for efficient state management ---
 const netTypesAdapter = createEntityAdapter({
-  // We expect each netType to have a unique `id`
   selectId: (netType) => netType.id,
 });
 
@@ -72,29 +71,29 @@ export const fetchNetTypes = createAsyncThunk(
 
 export const addNetType = createAsyncThunk(
   "netTypes/addNetType",
-  async (netTypeData, { rejectWithValue }) => {
-    // `netTypeData` would be an object like { name: 'Guest Network' }
+  async (netTypeData, { dispatch, rejectWithValue }) => {
     try {
-      // The API should return the newly created object, including its new ID.
-      // LATER: Replace with: const newNetType = await api.addNetType(netTypeData);
-      const newNetType = await mockApi.addNetType(netTypeData);
-      //const newNetType = await api.addNetType(netTypeData); // <-- 3. Import the real api
-      return newNetType;
+      await mockApi.addNetType(netTypeData);
+      // await api.addNetType(netTypeData); // Use this for the real API
+
+      // On success, re-fetch the entire list to ensure data consistency
+      dispatch(fetchNetTypes());
+      return netTypeData;
     } catch (error) {
       return rejectWithValue(error.message);
     }
   }
 );
 
-// 3. THUNK for DELETING a network type
 export const deleteNetType = createAsyncThunk(
   "netTypes/deleteNetType",
-  async (netTypeId, { rejectWithValue }) => {
+  async (netTypeId, { dispatch, rejectWithValue }) => {
     try {
-      // LATER: Replace with: await api.deleteNetType(netTypeId);
       await mockApi.deleteNetType(netTypeId);
-      // On success, return the ID of the deleted item so the reducer can remove it.
-      //await api.deleteNetType(netTypeId);  // <-- 4. Import the real api
+      // await api.deleteNetType(netTypeId); // Use this for the real API
+
+      // On success, re-fetch the list to reflect the deletion
+      dispatch(fetchNetTypes());
       return netTypeId;
     } catch (error) {
       return rejectWithValue(error.message);
@@ -126,21 +125,6 @@ const netTypesSlice = createSlice({
         state.status = "failed";
         state.error = action.payload;
       })
-
-      // --- Reducers for Adding (Pessimistic Update) ---
-      .addCase(addNetType.fulfilled, (state, action) => {
-        // Add the new item to the state after the API call succeeds
-        netTypesAdapter.addOne(state, action.payload);
-      })
-      // You can add .pending and .rejected cases for addNetType if you need to show specific UI feedback
-
-      // --- Reducers for Deleting (Pessimistic Update) ---
-      .addCase(deleteNetType.fulfilled, (state, action) => {
-        // Remove the item from the state after the API call succeeds
-        netTypesAdapter.removeOne(state, action.payload); // payload is the netTypeId
-      })
-      // You can add .pending and .rejected cases for deleteNetType for UI feedback
-
       // --- Reducer for Logout ---
       .addCase(logout, () => {
         // Reset the slice to its initial empty state on logout

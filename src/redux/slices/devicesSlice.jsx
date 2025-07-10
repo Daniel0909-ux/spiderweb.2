@@ -17,6 +17,18 @@ const mockApi = {
       deviceInfo: initialData.deviceInfo,
     };
   },
+  addCoreDevice: async (deviceData) => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    console.log("Mock API: Adding core device...", deviceData);
+    return { ...deviceData, id: Date.now() };
+  },
+  deleteCoreDevice: async (deviceId) => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    console.log("Mock API: Deleting core device with ID:", deviceId);
+    return { success: true };
+  },
+};
+
 /**
  * Normalizer Function (The "Bouncer")
  * Safely extracts the devices array from the raw API response.
@@ -43,20 +55,42 @@ export const fetchDevices = createAsyncThunk(
   "devices/fetchDevices",
   async (_, { rejectWithValue }) => {
     try {
-      console.log("[Thunk] Starting fetchDevices (single API call)...");
       const response = await mockApi.getCoreDevices();
-
-      // --- ONLY ONE API CALL IS NEEDED ---
-      //const response = await api.getCoreDevices();
-      // This assumes api.getCoreDevices() returns an object like:
-      // { devices: [ ... ], deviceInfo: { ... } }
-
-      console.log("[Thunk] Successfully fetched devices data:", response);
-
-      // The response is already in the correct format, so just return it.
+      // const response = await api.getCoreDevices(); // Use this for the real API
       return response;
     } catch (error) {
-      console.error("[Thunk] ERROR in fetchDevices:", error.response || error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+export const addCoreDevice = createAsyncThunk(
+  "devices/addCoreDevice",
+  async (deviceData, { dispatch, rejectWithValue }) => {
+    try {
+      await mockApi.addCoreDevice(deviceData);
+      // await api.addCoreDevice(deviceData); // Use this for the real API
+
+      // On success, re-fetch the entire list for data consistency
+      dispatch(fetchDevices());
+      return deviceData;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+export const deleteCoreDevice = createAsyncThunk(
+  "devices/deleteCoreDevice",
+  async (deviceId, { dispatch, rejectWithValue }) => {
+    try {
+      await mockApi.deleteCoreDevice(deviceId);
+      // await api.deleteDevice(deviceId); // Use this for the real API
+
+      // On success, re-fetch the list to reflect the deletion
+      dispatch(fetchDevices());
+      return deviceId;
+    } catch (error) {
       return rejectWithValue(error.message);
     }
   }
@@ -66,37 +100,19 @@ export const fetchDevices = createAsyncThunk(
 const devicesSlice = createSlice({
   name: "devices",
   initialState: {
-    items: [], // Start with an empty array for the device list
-    deviceInfo: {}, // Start with an empty object for device info
+    items: [],
+    deviceInfo: {}, // Holds detailed info keyed by device ID
     status: "idle", // 'idle' | 'loading' | 'succeeded' | 'failed'
     error: null,
   },
-  // Reducers for synchronous, direct state mutations
-  reducers: {
-    addCoreDevice: (state, action) => {
-      state.items.push(action.payload);
-    },
-    deleteCoreDevice: (state, action) => {
-      const deviceIdToDelete = action.payload;
-      state.items = state.items.filter((item) => item.id !== deviceIdToDelete);
-    },
-  },
-  // extraReducers handle the lifecycle of the async thunk
+  reducers: {}, // All actions are now async thunks handled in extraReducers
   extraReducers: (builder) => {
     builder
       .addCase(fetchDevices.pending, (state) => {
-        console.log(
-          "[Redux] fetchDevices fulfilled. state.Payload:",
-          state.payload
-        );
         state.status = "loading";
         state.error = null;
       })
       .addCase(fetchDevices.fulfilled, (state, action) => {
-        console.log(
-          "[Redux] fetchDevices fulfilled. action.Payload:",
-          action.payload
-        );
         state.status = "succeeded";
         // Use the normalizer for the devices array
         state.items = normalizeDevicesApiResponse(action.payload);
@@ -110,11 +126,7 @@ const devicesSlice = createSlice({
   },
 });
 
-// --- Export Actions ---
-export const { addCoreDevice, deleteCoreDevice } = devicesSlice.actions;
-
 // --- Export Selectors ---
-
 export const selectAllDevices = (state) => state.devices.items;
 export const selectDeviceInfo = (state) => state.devices.deviceInfo;
 export const selectDevicesStatus = (state) => state.devices.status;
@@ -133,25 +145,6 @@ export const selectDevicesByTypeId = createSelector(
       ? devices.filter((d) => d.network_type_id === typeId)
       : [];
   }
-);
-
-// --- MEMOIZED SELECTOR for the loading/error status ---
-// This selector solves the "returned a different result" warning.
-// It combines `status` and `error` into a single object, but only creates a
-// new object if `status` or `error` themselves have actually changed.
-
-// 1. Input selectors: These grab the raw data without creating new references.
-const selectStatus = (state) => state.devices.status;
-const selectError = (state) => state.devices.error;
-
-// 2. Memoized Selector: This is the one to use in your components.
-export const selectCoreDataStatus = createSelector(
-  [selectStatus, selectError], // An array of the input selectors
-  (status, error) => ({
-    // The "result" function that creates the object
-    status,
-    error,
-  })
 );
 
 // --- Export Reducer ---
