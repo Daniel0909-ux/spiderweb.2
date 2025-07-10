@@ -11,8 +11,11 @@ import {
   MdChevronRight,
 } from "react-icons/md";
 import { DarkModeToggle } from "../ui/dark-mode-toggle";
+import { NotificationToast } from "./NotificationToast";
+// eslint-disable-next-line no-unused-vars
+import { AnimatePresence, motion } from "framer-motion";
 
-// Map labels to URL paths for clean routing
+// NavLink and NavItem components remain unchanged...
 const navLinks = {
   Dashboard: "/",
   Search: "/search",
@@ -22,7 +25,6 @@ const navLinks = {
   Settings: "/settings",
 };
 
-// NavItem component remains unchanged
 function NavItem({ label, icon, collapsed, active }) {
   return (
     <Link
@@ -40,8 +42,14 @@ function NavItem({ label, icon, collapsed, active }) {
   );
 }
 
-// Main Sidebar component with the updated title style
-export function Sidebar({ currentPage, collapsed, setCollapsed }) {
+export function Sidebar({
+  currentPage,
+  collapsed,
+  setCollapsed,
+  notifications,
+  onDismissNotification,
+  showInternalNotifications,
+}) {
   const navItems = [
     { label: "Dashboard", icon: <MdDashboard size={20} /> },
     { label: "Search", icon: <MdSearch size={20} /> },
@@ -60,10 +68,9 @@ export function Sidebar({ currentPage, collapsed, setCollapsed }) {
         collapsed ? "w-16" : "w-60"
       } bg-white dark:bg-gray-900 border-r dark:border-gray-700 shadow-sm flex flex-col transition-all duration-300`}
     >
-      {/* --- HEADER SECTION (THIS IS WHERE THE CHANGE IS) --- */}
+      {/* Header (Unchanged) */}
       <div className="flex items-center justify-between p-4 border-b dark:border-gray-700 shrink-0">
         {!collapsed && (
-          // THIS IS THE CORRECTED LINE
           <h1 className="text-2xl font-extrabold text-gray-800 dark:text-white tracking-wide">
             SPIDERWEB
           </h1>
@@ -80,7 +87,7 @@ export function Sidebar({ currentPage, collapsed, setCollapsed }) {
         </button>
       </div>
 
-      {/* Main Navigation (unchanged) */}
+      {/* Main Navigation (Unchanged) */}
       <nav className="flex-1 flex flex-col space-y-1 p-2 overflow-y-auto">
         {navItems.map((item) => (
           <NavItem
@@ -93,7 +100,30 @@ export function Sidebar({ currentPage, collapsed, setCollapsed }) {
         ))}
       </nav>
 
-      {/* Footer Navigation (unchanged) */}
+      {/* --- NOTIFICATION AREA (MODIFIED) --- */}
+      <div className="flex-shrink-0 p-2 space-y-2 overflow-hidden">
+        <AnimatePresence>
+          {/* 2. Use the new prop to decide whether to render the list. */}
+          {/* This removes the dependency on the local 'collapsed' state. */}
+          {showInternalNotifications &&
+            notifications.map((alert) => (
+              <motion.div
+                key={alert.id}
+                layout
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, x: -50 }}
+              >
+                <NotificationToast
+                  alert={alert}
+                  onDismiss={() => onDismissNotification(alert.id)}
+                />
+              </motion.div>
+            ))}
+        </AnimatePresence>
+      </div>
+
+      {/* Footer Navigation (Unchanged) */}
       <div className="px-2 py-2 border-t dark:border-gray-700 shrink-0">
         {footerItems.map((item) => (
           <NavItem

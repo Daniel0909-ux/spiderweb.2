@@ -1,5 +1,3 @@
-// src/redux/slices/tenGigLinksSlice.js
-
 import {
   createSlice,
   createSelector,
@@ -7,16 +5,44 @@ import {
 } from "@reduxjs/toolkit";
 import { initialData } from "../initialData";
 
-//import { api } from "../../services/apiServices"; // <-- 1. Import the real api
+// import { api } from "../../services/apiServices"; // To be used for the real API
 
-// --- MOCK API: Mimics the real API call using dummy data ---
+// --- MOCK API: Simulates the backend API calls ---
 const mockApi = {
   getTenGigLinks: async () => {
     // Simulate a network delay for a realistic loading experience
     await new Promise((resolve) => setTimeout(resolve, 350));
-    // The data from initialData.tenGigLinks is now enriched
+    // The data from initialData.tenGigLinks is already enriched
     return initialData.tenGigLinks;
   },
+};
+
+/**
+ * Normalizer Function (The "Bouncer")
+ * Safely processes the raw API response and guarantees a clean array.
+ * @param {any} apiResponse - The raw data from action.payload.
+ * @returns {Array} A safe array of 10-Gig link objects.
+ */
+const normalizeLinksApiResponse = (apiResponse) => {
+  // Check for common nested structures
+  if (apiResponse && Array.isArray(apiResponse.data)) {
+    return apiResponse.data;
+  }
+  if (apiResponse && Array.isArray(apiResponse.links)) {
+    return apiResponse.links;
+  }
+
+  // Fallback for a direct array response (like our current mock data)
+  if (Array.isArray(apiResponse)) {
+    return apiResponse;
+  }
+
+  // If the format is unknown, log a warning and return a safe empty array.
+  console.warn(
+    "Could not normalize 10-Gig Links API response. Data format is unexpected:",
+    apiResponse
+  );
+  return [];
 };
 
 // --- ASYNC THUNK: For fetching the 10-Gigabit links ---
@@ -25,8 +51,7 @@ export const fetchTenGigLinks = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await mockApi.getTenGigLinks();
-      // Note: Using 'getTenGigLines' to match the function name in api.js
-      //const response = await api.getTenGigLines(); // <-- 2. Import the real api
+      // const response = await api.getTenGigLines(); // Use this for the real API
       return response;
     } catch (error) {
       return rejectWithValue(error.message);
@@ -35,31 +60,10 @@ export const fetchTenGigLinks = createAsyncThunk(
 );
 
 // --- The Slice Definition ---
-// Shape of a Link object in the state:
-// {
-//   id: "link-10g-xyz",
-//   source: "rtr-abcd-1",
-//   target: "rtr-efgh-2",
-//   status: "up" | "down" | "issue",
-//   network_type_id: 1,
-//   ip: "...",
-//
-//   // --- NEW ENRICHED FIELDS ---
-//   physicalStatus: "Up" | "Down" | "N/A",
-//   protocolStatus: "Up" | "Down" | "N/A",
-//   MPLS: "Enabled" | "N/A",
-//   OSPF: "Enabled" | "N/A",
-//   Bandwidth: 10000 | "N/A",
-//   Description: "Some description text..." | "N/A",
-//   MediaType: "Fiber" | "N/A",
-//   CDP: "neighbor-switch-xyz" | "N/A",
-//   TX: -3.4 | "N/A",
-//   RX: -4.1 | "N/A"
-// }
 const tenGigLinksSlice = createSlice({
   name: "tenGigLinks",
   initialState: {
-    items: [], // Start with an empty array for the links
+    items: [],
     status: "idle", // 'idle' | 'loading' | 'succeeded' | 'failed'
     error: null,
   },
@@ -75,6 +79,7 @@ const tenGigLinksSlice = createSlice({
     updateTenGigLink: (state, action) => {
       const { id, ...updatedFields } = action.payload;
       const linkIndex = state.items.findIndex((link) => link.id === id);
+      // Safely update only if the link exists in the current state
       if (linkIndex !== -1) {
         state.items[linkIndex] = {
           ...state.items[linkIndex],
@@ -92,8 +97,8 @@ const tenGigLinksSlice = createSlice({
       })
       .addCase(fetchTenGigLinks.fulfilled, (state, action) => {
         state.status = "succeeded";
-        // Populate the state with the fetched link data
-        state.items = action.payload;
+        // Use the normalizer to safely update the state
+        state.items = normalizeLinksApiResponse(action.payload);
       })
       .addCase(fetchTenGigLinks.rejected, (state, action) => {
         state.status = "failed";
@@ -108,8 +113,10 @@ export const { addTenGigLink, deleteTenGigLink, updateTenGigLink } =
 
 // --- Export Selectors ---
 export const selectAllTenGigLinks = (state) => state.tenGigLinks.items;
+export const selectLinksStatus = (state) => state.tenGigLinks.status;
+export const selectLinksError = (state) => state.tenGigLinks.error;
 
-// --- MEMOIZED SELECTOR ---
+// --- MEMOIZED SELECTOR for filtering links by network type ID ---
 const selectLinkItems = (state) => state.tenGigLinks.items;
 const selectTypeIdFromLink = (state, typeId) => typeId;
 
@@ -117,7 +124,10 @@ export const selectLinksByTypeId = createSelector(
   [selectLinkItems, selectTypeIdFromLink],
   (links, typeId) => {
     if (!typeId) return [];
-    return links.filter((l) => l.network_type_id === typeId);
+    // Ensure `links` is an array before filtering
+    return Array.isArray(links)
+      ? links.filter((l) => l.network_type_id === typeId)
+      : [];
   }
 );
 

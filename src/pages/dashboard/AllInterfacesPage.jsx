@@ -80,11 +80,20 @@ export default function AllInterfacesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [deviceFilter, setDeviceFilter] = useState("all");
+  const [linkTypeFilter, setLinkTypeFilter] = useState("all");
+  const [expandedRowId, setExpandedRowId] = useState(null); // <-- NEW STATE
+
+  // --- 2. The click handler to toggle the expanded row ---
+  const handleRowClick = (rowId) => {
+    setExpandedRowId((prevId) => (prevId === rowId ? null : rowId));
+  };
 
   const filteredInterfaces = useMemo(() => {
     return interfaces.filter((iface) => {
       if (statusFilter !== "all" && iface.status !== statusFilter) return false;
       if (deviceFilter !== "all" && !iface.deviceName.includes(deviceFilter))
+        return false;
+      if (linkTypeFilter !== "all" && iface.linkType !== linkTypeFilter)
         return false;
       if (searchTerm) {
         const lowercasedTerm = searchTerm.toLowerCase();
@@ -96,7 +105,31 @@ export default function AllInterfacesPage() {
       }
       return true;
     });
-  }, [interfaces, searchTerm, statusFilter, deviceFilter]);
+  }, [interfaces, statusFilter, deviceFilter, linkTypeFilter, searchTerm]);
+
+  // --- 3. Create the final data array for the virtualizer ---
+  const virtualizerData = useMemo(() => {
+    if (!expandedRowId) {
+      // If no row is expanded, just return the filtered data.
+      return filteredInterfaces;
+    }
+
+    const dataWithDetails = [];
+    for (const item of filteredInterfaces) {
+      // Add the normal item first.
+      dataWithDetails.push(item);
+      // If this item is the one that's expanded...
+      if (item.id === expandedRowId) {
+        // ...inject a special "detail" object right after it.
+        dataWithDetails.push({
+          id: `${item.id}-detail`, // Create a unique ID for the detail row
+          isDetail: true, // A flag our table will look for
+          originalData: item, // Pass the original data to the detail component
+        });
+      }
+    }
+    return dataWithDetails;
+  }, [filteredInterfaces, expandedRowId]);
 
   // Memoized column definitions for the virtualized table
   const columns = useMemo(
@@ -215,7 +248,8 @@ export default function AllInterfacesPage() {
       </header>
 
       <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md flex-shrink-0">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Change the grid layout to accommodate 4 items */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Search Input */}
           <div>
             <label
@@ -274,16 +308,42 @@ export default function AllInterfacesPage() {
               <option value="Admin Down">Admin Down</option>
             </select>
           </div>
+          <div>
+            <label
+              htmlFor="link-type-filter"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
+              Filter by Link Type
+            </label>
+            <select
+              id="link-type-filter"
+              value={linkTypeFilter}
+              onChange={(e) => setLinkTypeFilter(e.target.value)}
+              className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            >
+              <option value="all">All Link Types</option>
+              <option value="regular">Regular</option>
+              <option value="bundle">Bundle</option>
+              <option value="tunneling">Tunneling</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* The VirtualizedTable container will show the skeleton, error message, or the table */}
       <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md flex-grow min-h-0">
         <VirtualizedTable
-          data={filteredInterfaces}
+          // --- THIS IS THE FIX ---
+          // By adding a key that changes when the expanded row changes,
+          // we tell React to unmount the old table and mount a brand new one.
+          // This forces the useVirtualizer hook to run from scratch and
+          // correctly calculate the new layout.
+          key={expandedRowId || "none"}
+          data={virtualizerData}
           columns={columns}
           isLoading={isLoading}
           emptyMessage={emptyMessage}
+          onRowClick={handleRowClick}
+          expandedRowId={expandedRowId}
         />
       </div>
     </div>

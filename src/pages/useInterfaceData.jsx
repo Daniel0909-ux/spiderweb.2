@@ -12,9 +12,6 @@ import {
   toggleFavoriteLink,
 } from "../redux/slices/favoritesSlice";
 
-/**
- * The "Single Source of Truth" Hook for all network connections.
- */
 export function useInterfaceData() {
   const dispatch = useDispatch();
 
@@ -55,13 +52,24 @@ export function useInterfaceData() {
           in: faker.number.int({ max: 5 }),
           out: faker.number.int({ max: 2 }),
         },
+        linkType: "regular",
       };
     });
 
-    // B. Transform 10-Gigabit Core Links into the common format
+    // --- B. Transform 10-Gigabit Core Links ---
     const tenGigCoreLinks = allTenGigLinks.map((link) => {
       const formattedStatus =
         link.status.charAt(0).toUpperCase() + link.status.slice(1);
+
+      // --- ADD THE NEW PROPERTY ---
+      // We'll use faker to randomly assign a type for demonstration.
+      // In a real scenario, this would come from the API data (`link.type`).
+      const randomLinkType = faker.helpers.arrayElement([
+        "regular",
+        "bundle",
+        "tunneling",
+      ]);
+
       return {
         id: link.id,
         deviceName: `${link.source} <-> ${link.target}`,
@@ -82,10 +90,10 @@ export function useInterfaceData() {
           in: faker.number.int({ max: 20 }),
           out: faker.number.int({ max: 15 }),
         },
+        linkType: randomLinkType, // Assign the determined link type
       };
     });
 
-    // C. Combine all transformed data into one master array
     const allLinks = [...siteConnections, ...tenGigCoreLinks];
 
     // D. Add the `isFavorite` property to each item

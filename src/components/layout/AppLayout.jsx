@@ -9,10 +9,15 @@ import {
   disconnect,
   selectRealtimeStatus,
 } from "../../redux/slices/realtimeSlice";
+import {
+  selectCurrentNotifications, // Use the plural selector for the list
+  dismissNotification, // Use the action for dismissing a single item
+} from "../../redux/slices/uiSlice";
 
 // --- Helper Components & Hooks ---
 import { useDashboardLogic } from "../../pages/useDashboardLogic";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
+import { FloatingNotification } from "../ui/FloatingNotification";
 import { Sidebar } from "../ui/sidebar";
 
 // --- Page Components ---
@@ -100,6 +105,13 @@ function AppLayout() {
     document.documentElement.classList.contains("dark") ? "dark" : "light"
   );
 
+  // --- THIS IS THE FIX: Use the correct selector and action ---
+  const notifications = useSelector(selectCurrentNotifications);
+
+  const handleDismissNotification = (alertId) => {
+    dispatch(dismissNotification(alertId));
+  };
+
   useEffect(() => {
     const observer = new MutationObserver(() => {
       setTheme(
@@ -123,7 +135,18 @@ function AppLayout() {
     return "Dashboard";
   }, [location.pathname]);
 
-  const isDashboardActive = activePageLabel === "Dashboard";
+  // --- MODIFICATION 1: Determine which pages have tabs ---
+  // The tabs should only show on the main dashboard.
+  const pageHasTabs = activePageLabel === "Dashboard";
+
+  // --- MODIFICATION 2: Determine which pages can be fullscreened ---
+  // Any page that isn't a simple settings/help page can be fullscreen.
+  const pageCanBeFullscreen = [
+    "Dashboard",
+    "Search",
+    "Admin Panel",
+    "Alerts",
+  ].includes(activePageLabel);
 
   const dashboardLogic = useDashboardLogic({
     isAppFullscreen: isFullscreen,
@@ -131,8 +154,10 @@ function AppLayout() {
   });
   const { activeTabValue, handleTabChangeForNavigation } = dashboardLogic;
 
+  // --- MODIFICATION 3: Update the toggle logic ---
   const toggleFullscreen = () => {
-    if (!isDashboardActive) return;
+    // Only allow toggling if the current page supports it.
+    if (!pageCanBeFullscreen) return;
     setIsFullscreen(!isFullscreen);
   };
 
@@ -145,8 +170,10 @@ function AppLayout() {
     navigate("/login", { replace: true });
   };
 
+  // --- MODIFICATION 4: Update the render logic for the button ---
   const renderFullscreenToggleButton = () => {
-    if (!isDashboardActive) return null;
+    // Only render the button if the page supports it.
+    if (!pageCanBeFullscreen) return null;
 
     const ButtonIcon = isFullscreen ? ExitFullscreenIcon : FullscreenIcon;
     const buttonTitle = isFullscreen ? "Exit Fullscreen" : "Fullscreen";
@@ -163,115 +190,140 @@ function AppLayout() {
     );
   };
 
+  const showFloatingNotifications = isFullscreen || isSidebarCollapsed;
+
   return (
-    <div className="flex h-screen bg-gray-100 dark:bg-gray-950 text-gray-800 dark:text-gray-100 transition-colors overflow-hidden">
-      {!isFullscreen && (
-        <Sidebar
-          currentPage={activePageLabel}
-          collapsed={isSidebarCollapsed}
-          setCollapsed={setIsSidebarCollapsed}
+    <>
+      {/* 1. Render the FloatingNotification component OUTSIDE the main layout div. */}
+      {/* It is now a sibling, not a child, so it won't be clipped. */}
+      {showFloatingNotifications && (
+        <FloatingNotification
+          notifications={notifications}
+          onDismiss={handleDismissNotification}
         />
       )}
-      <main className="flex-1 flex flex-col relative">
-        <header
-          className={`bg-white dark:bg-gray-800 shrink-0 flex items-center gap-4 ${
-            isFullscreen ? "p-4 border-b dark:border-gray-700" : "p-4 shadow-sm"
-          }`}
-        >
-          <h1
-            className={`text-2xl shrink-0 ${
+
+      {/* 2. The main layout div remains, but no longer contains the floating notifications. */}
+      <div className="flex h-screen bg-gray-100 dark:bg-gray-950 text-gray-800 dark:text-gray-100 transition-colors overflow-hidden">
+        {!isFullscreen && (
+          <Sidebar
+            currentPage={activePageLabel}
+            collapsed={isSidebarCollapsed}
+            setCollapsed={setIsSidebarCollapsed}
+            showInternalNotifications={!showFloatingNotifications}
+            notifications={notifications}
+            onDismissNotification={handleDismissNotification}
+          />
+        )}
+
+        <main className="flex-1 flex flex-col relative">
+          <header
+            className={`bg-white dark:bg-gray-800 shrink-0 flex items-center gap-4 ${
               isFullscreen
-                ? "font-extrabold text-gray-900 dark:text-white tracking-wide"
-                : "font-semibold text-gray-900 dark:text-white"
+                ? "p-4 border-b dark:border-gray-700"
+                : "p-4 shadow-sm"
             }`}
           >
-            {isFullscreen ? "SPIDERWEB" : activePageLabel}
-          </h1>
-
-          {isDashboardActive && (
-            <div className="flex-1 flex justify-center">
-              <Tabs
-                value={activeTabValue}
-                onValueChange={handleTabChangeForNavigation}
-                className="w-full md:w-[750px] lg:w-[800px]"
-              >
-                <TabsList className="grid-cols-5">
-                  <TabsTrigger
-                    value="favorites"
-                    className="flex items-center gap-1.5"
-                  >
-                    <Star className="h-4 w-4 text-yellow-500" /> Favorites
-                  </TabsTrigger>
-                  <TabsTrigger value="all_interfaces">
-                    All Interfaces
-                  </TabsTrigger>
-                  <TabsTrigger value="l_network">L-chart</TabsTrigger>
-                  <TabsTrigger value="p_network">P-chart</TabsTrigger>
-                  <TabsTrigger value="site">Site</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
-          )}
-
-          {/* Wrapper for right-side action buttons */}
-          <div className="flex items-center gap-4 ml-auto">
-            <RealtimeStatusIndicator />
-            {renderFullscreenToggleButton()}
-            <button
-              onClick={handleLogout}
-              title="Log Out"
-              aria-label="Log Out"
-              className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg text-gray-500 hover:bg-red-100 hover:text-red-600 dark:text-gray-400 dark:hover:bg-red-900/50 dark:hover:text-red-400 transition-colors"
+            <h1
+              className={`text-2xl shrink-0 ${
+                isFullscreen
+                  ? "font-extrabold text-gray-900 dark:text-white tracking-wide"
+                  : "font-semibold text-gray-900 dark:text-white"
+              }`}
             >
-              <LogOut className="w-5 h-5" />
-            </button>
-          </div>
-        </header>
+              {isFullscreen ? "SPIDERWEB" : activePageLabel}
+            </h1>
 
-        {/* Scrollable main content area */}
-        <div
-          className={`flex-1 min-h-0 overflow-y-auto ${
-            theme === "dark"
-              ? "dark-scrollbar dark-scrollbar-firefox"
-              : "light-scrollbar light-scrollbar-firefox"
-          } ${!isFullscreen && "p-4 md:p-6"}`}
-        >
-          <Routes>
-            <Route path="/admin" element={<AdminPanelPage />} />
-            <Route path="/search" element={<SearchPage />} />
-            <Route path="/notifications" element={<AlertsPage />} />
-            <Route
-              path="/help"
-              element={
-                <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
-                  Help Page Content
-                </div>
-              }
-            />
-            <Route
-              path="/settings"
-              element={
-                <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
-                  Settings Page Content
-                </div>
-              }
-            />
-            <Route
-              path="/*"
-              element={
-                <DashboardPage
-                  isAppFullscreen={isFullscreen}
-                  activeTabValue={activeTabValue}
-                  theme={theme}
-                  popupAnchorCoords={dashboardLogic.popupAnchorCoords}
-                  chartKeySuffix={dashboardLogic.chartKeySuffix}
-                />
-              }
-            />
-          </Routes>
-        </div>
-      </main>
-    </div>
+            {/* --- MODIFICATION 5: Conditionally render the tabs --- */}
+            {pageHasTabs && (
+              <div className="flex-1 flex justify-center">
+                <Tabs
+                  value={activeTabValue}
+                  onValueChange={handleTabChangeForNavigation}
+                  className="w-full md:w-[750px] lg:w-[800px]"
+                >
+                  <TabsList className="grid-cols-5">
+                    <TabsTrigger
+                      value="favorites"
+                      className="flex items-center gap-1.5"
+                    >
+                      <Star className="h-4 w-4 text-yellow-500" /> Favorites
+                    </TabsTrigger>
+                    <TabsTrigger value="all_interfaces">
+                      All Interfaces
+                    </TabsTrigger>
+                    <TabsTrigger value="l_network">L-chart</TabsTrigger>
+                    <TabsTrigger value="p_network">P-chart</TabsTrigger>
+                    <TabsTrigger value="site">Site</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+            )}
+
+            {!pageHasTabs && <div className="flex-1"></div>}
+
+            {/* Wrapper for right-side action buttons */}
+            <div className="flex items-center gap-4">
+              {" "}
+              {/* Removed ml-auto */}
+              <RealtimeStatusIndicator />
+              {renderFullscreenToggleButton()}
+              <button
+                onClick={handleLogout}
+                title="Log Out"
+                aria-label="Log Out"
+                className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg text-gray-500 hover:bg-red-100 hover:text-red-600 dark:text-gray-400 dark:hover:bg-red-900/50 dark:hover:text-red-400 transition-colors"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
+          </header>
+
+          {/* --- MODIFICATION 6: Adjust padding on the main content area --- */}
+          <div
+            className={`flex-1 min-h-0 overflow-y-auto ${
+              theme === "dark"
+                ? "dark-scrollbar dark-scrollbar-firefox"
+                : "light-scrollbar light-scrollbar-firefox"
+            } ${!isFullscreen && "p-4 md:p-6"}`} // The padding is now correctly tied ONLY to the fullscreen state
+          >
+            <Routes>
+              <Route path="/admin" element={<AdminPanelPage />} />
+              <Route path="/search" element={<SearchPage />} />
+              <Route path="/notifications" element={<AlertsPage />} />
+              <Route
+                path="/help"
+                element={
+                  <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+                    Help Page Content
+                  </div>
+                }
+              />
+              <Route
+                path="/settings"
+                element={
+                  <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+                    Settings Page Content
+                  </div>
+                }
+              />
+              <Route
+                path="/*"
+                element={
+                  <DashboardPage
+                    isAppFullscreen={isFullscreen}
+                    activeTabValue={activeTabValue}
+                    theme={theme}
+                    popupAnchorCoords={dashboardLogic.popupAnchorCoords}
+                    chartKeySuffix={dashboardLogic.chartKeySuffix}
+                  />
+                }
+              />
+            </Routes>
+          </div>
+        </main>
+      </div>
+    </>
   );
 }
 

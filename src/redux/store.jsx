@@ -10,6 +10,7 @@ import netTypesReducer from "./slices/netTypesSlice";
 import authReducer, { logout } from "./slices/authSlice";
 import realtimeReducer from "./slices/realtimeSlice";
 import alertsReducer from "./slices/alertsSlice";
+import uiReducer from "./slices/uiSlice";
 import realtimeMiddleware from "./middleware/realtimeMiddleware";
 
 // 1. Combine all your slice reducers into a single "app" reducer
@@ -23,6 +24,7 @@ const appReducer = combineReducers({
   auth: authReducer,
   realtime: realtimeReducer,
   alerts: alertsReducer,
+  ui: uiReducer,
 });
 
 // Create a "root" reducer that delegates to the appReducer

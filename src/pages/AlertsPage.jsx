@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   MdErrorOutline,
   MdWarningAmber,
@@ -284,6 +285,8 @@ export function AlertsPage() {
   const dispatch = useDispatch();
   const allAlerts = useSelector(selectAllAlerts);
   const status = useSelector(selectAlertsStatus);
+  const location = useLocation(); // <-- 2. Get the location object
+  const navigate = useNavigate();
 
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -292,6 +295,26 @@ export function AlertsPage() {
   const [selectedTypes, setSelectedTypes] = useState(initialTypeState);
   const parentRef = useRef(null);
   const [columnCount, setColumnCount] = useState(3);
+
+  useEffect(() => {
+    // Check if we have state and an `openAlertId` property from the navigation.
+    const alertIdToOpen = location.state?.openAlertId;
+
+    if (alertIdToOpen) {
+      // Find the full alert object from our master list in Redux.
+      const alertToSelect = allAlerts.find((a) => a.id === alertIdToOpen);
+
+      if (alertToSelect) {
+        // If we found it, trigger the same logic as if we had clicked on it.
+        setSelectedAlert(alertToSelect);
+        setIsModalOpen(true);
+
+        // IMPORTANT: Clear the state from the location object.
+        // This prevents the modal from re-opening if the user refreshes the page.
+        navigate(location.pathname, { replace: true, state: {} });
+      }
+    }
+  }, [location.state, allAlerts, navigate, location.pathname]);
 
   useEffect(() => {
     if (status === "idle") {

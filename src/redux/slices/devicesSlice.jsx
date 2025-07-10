@@ -5,25 +5,40 @@ import {
 } from "@reduxjs/toolkit";
 import { initialData } from "../initialData";
 
-//import { api } from "../../services/apiServices"; // <-- 1. Import the real api
+// import { api } from "../../services/apiServices"; // To be used for the real API
 
-// --- MOCK API: Mimics the real API call using dummy data ---
-// This isolates the data source, preparing it for the real API.
+// --- MOCK API: Simulates the backend API calls for devices ---
 const mockApi = {
   getCoreDevices: async () => {
-    // Simulate a network delay
     await new Promise((resolve) => setTimeout(resolve, 250));
-
-    // The real API might return devices and deviceInfo separately.
-    // For this mock, we'll bundle them to populate the initial state easily.
+    // The mock API returns an object containing both the devices array and deviceInfo object
     return {
       devices: initialData.coreDevices,
       deviceInfo: initialData.deviceInfo,
     };
   },
+/**
+ * Normalizer Function (The "Bouncer")
+ * Safely extracts the devices array from the raw API response.
+ * @param {any} apiResponse - The raw data from action.payload.
+ * @returns {Array} A safe array of device objects.
+ */
+const normalizeDevicesApiResponse = (apiResponse) => {
+  if (apiResponse && Array.isArray(apiResponse.devices)) {
+    return apiResponse.devices;
+  }
+  if (Array.isArray(apiResponse)) {
+    return apiResponse;
+  }
+  console.warn(
+    "Could not normalize Devices API response. Data format is unexpected:",
+    apiResponse
+  );
+  return [];
 };
 
-// --- ASYNC THUNK: For fetching the devices and their info (SIMPLIFIED) ---
+// --- ASYNC THUNKS ---
+
 export const fetchDevices = createAsyncThunk(
   "devices/fetchDevices",
   async (_, { rejectWithValue }) => {
@@ -83,13 +98,14 @@ const devicesSlice = createSlice({
           action.payload
         );
         state.status = "succeeded";
-        // Populate the state with the fetched data
-        state.items = action.payload.devices;
-        state.deviceInfo = action.payload.deviceInfo;
+        // Use the normalizer for the devices array
+        state.items = normalizeDevicesApiResponse(action.payload);
+        // Safely set the deviceInfo, falling back to an empty object
+        state.deviceInfo = action.payload?.deviceInfo || {};
       })
       .addCase(fetchDevices.rejected, (state, action) => {
         state.status = "failed";
-        state.error = action.payload; // Get error message from rejectWithValue
+        state.error = action.payload;
       });
   },
 });
@@ -101,8 +117,10 @@ export const { addCoreDevice, deleteCoreDevice } = devicesSlice.actions;
 
 export const selectAllDevices = (state) => state.devices.items;
 export const selectDeviceInfo = (state) => state.devices.deviceInfo;
+export const selectDevicesStatus = (state) => state.devices.status;
+export const selectDevicesError = (state) => state.devices.error;
 
-// --- MEMOIZED SELECTOR for filtering devices ---
+// --- MEMOIZED SELECTOR for filtering devices by type ID ---
 const selectDeviceItems = (state) => state.devices.items;
 const selectTypeIdFromDevice = (state, typeId) => typeId;
 
@@ -110,7 +128,10 @@ export const selectDevicesByTypeId = createSelector(
   [selectDeviceItems, selectTypeIdFromDevice],
   (devices, typeId) => {
     if (!typeId) return [];
-    return devices.filter((d) => d.network_type_id === typeId);
+    // Ensure `devices` is an array before filtering
+    return Array.isArray(devices)
+      ? devices.filter((d) => d.network_type_id === typeId)
+      : [];
   }
 );
 

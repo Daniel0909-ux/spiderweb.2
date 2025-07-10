@@ -1,5 +1,4 @@
 // src/redux/slices/alertsSlice.js  <-- Note the .js extension
-
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { generateMockAlerts } from "../dummyData";
 
@@ -58,7 +57,17 @@ const alertsSlice = createSlice({
     status: "idle", // 'idle' | 'loading' | 'succeeded' | 'failed'
     error: null,
   },
-  reducers: {},
+  // --- ADD A NEW REDUCER HERE ---
+  reducers: {
+    /**
+     * Adds a single new alert to the beginning of the list.
+     * This is for real-time updates.
+     */
+    addRealtimeAlert: (state, action) => {
+      // unshift() adds the new item to the start of the array
+      state.items.unshift(action.payload);
+    },
+  },
   extraReducers: (builder) => {
     builder
       // Fetching alerts
@@ -92,6 +101,7 @@ const alertsSlice = createSlice({
 });
 
 // --- FIX: ADD THE MISSING EXPORTS HERE ---
+export const { addRealtimeAlert } = alertsSlice.actions;
 export const selectAllAlerts = (state) => state.alerts.items;
 export const selectAlertsStatus = (state) => state.alerts.status; // This was missing
 export const selectAlertsError = (state) => state.alerts.error; // Also good to have

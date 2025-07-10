@@ -1,5 +1,3 @@
-// src/redux/slices/sitesSlice.js
-
 import {
   createSlice,
   createSelector,
@@ -7,17 +5,46 @@ import {
 } from "@reduxjs/toolkit";
 import { initialData } from "../initialData";
 
-//import { api } from "../../services/apiServices"; // <-- 1. Import the real api
+//import { api } from "../../services/apiServices"; // <-- To be used for the real API
 
 // --- MOCK API: Mimics the real API call using dummy data ---
-// This isolates the data source, making it easy to swap for the real API later.
 const mockApi = {
   getSites: async () => {
     // Simulate a network delay for a realistic loading experience
     await new Promise((resolve) => setTimeout(resolve, 300));
-    // The data from initialData.sites is now enriched with more fields.
+    // The data from initialData.sites is now an object, not a direct array
     return initialData.sites;
   },
+};
+
+/**
+ * Normalizer Function (The "Bouncer")
+ * Takes the raw API response and returns a clean, guaranteed array of site items.
+ * This is the defensive layer that prevents the app from crashing.
+ * @param {any} apiResponse - The raw data from action.payload.
+ * @returns {Array} A safe array of site objects.
+ */
+const normalizeSitesApiResponse = (apiResponse) => {
+  // Check for the most likely structure: an object with a 'data' array inside.
+  if (apiResponse && Array.isArray(apiResponse.data)) {
+    return apiResponse.data;
+  }
+
+  // Fallback check: Did the API just return a plain array?
+  if (Array.isArray(apiResponse)) {
+    console.warn(
+      "Sites API returned a direct array. Normalizer handled it, but API structure may have changed."
+    );
+    return apiResponse;
+  }
+
+  // If neither of the above, the data is in an unknown format.
+  // Log a warning and return a safe empty array to prevent crashes.
+  console.warn(
+    "Could not normalize sites API response. Data format is unexpected:",
+    apiResponse
+  );
+  return [];
 };
 
 // --- ASYNC THUNK: For fetching the sites ---
@@ -26,7 +53,7 @@ export const fetchSites = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await mockApi.getSites();
-      //const response = await api.getSites(); // <-- 2. Import the real api
+      // const response = await api.getSites(); // <-- Use this for the real API
       return response;
     } catch (error) {
       return rejectWithValue(error.message);
@@ -35,26 +62,6 @@ export const fetchSites = createAsyncThunk(
 );
 
 // --- The Slice Definition ---
-// Shape of a Site object in the state:
-// {
-//   id: 56789,
-//   interface_id: "TenGigabitEthernet1/0/1", // Note: This is now the interface name
-//   device_id: 456,
-//   site_name_english: 'Site SomeCity',
-//   timestamp: "...",
-//
-//   // --- NEW ENRICHED FIELDS ---
-//   physicalStatus: "Up" | "Down" | "N/A",
-//   protocolStatus: "Up" | "Down" | "N/A",
-//   MPLS: "Enabled" | "N/A",
-//   OSPF: "Enabled" | "N/A",
-//   Bandwidth: 10000 | "N/A",
-//   Description: "Some description text..." | "N/A",
-//   MediaType: "Fiber" | "N/A",
-//   CDP: "neighbor-switch-xyz" | "N/A",
-//   TX: -3.4 | "N/A",
-//   RX: -4.1 | "N/A"
-// }
 const sitesSlice = createSlice({
   name: "sites",
   initialState: {
@@ -96,8 +103,8 @@ const sitesSlice = createSlice({
       })
       .addCase(fetchSites.fulfilled, (state, action) => {
         state.status = "succeeded";
-        // Populate the state with the fetched site data
-        state.items = action.payload;
+        // Use the normalizer to safely extract the array from the payload
+        state.items = normalizeSitesApiResponse(action.payload);
       })
       .addCase(fetchSites.rejected, (state, action) => {
         state.status = "failed";
@@ -115,12 +122,12 @@ export const selectAllSites = (state) => state.sites.items;
 export const selectSiteById = (state, siteId) =>
   state.sites.items.find((site) => site.id === siteId);
 
-// --- MEMOIZED SELECTOR ---
-const selectSites = (state) => state.sites.items;
+// --- MEMOIZED SELECTOR for filtering sites by device ID ---
+const selectSitesItems = (state) => state.sites.items;
 const selectDeviceId = (state, deviceId) => deviceId;
 
 export const selectSitesByDeviceId = createSelector(
-  [selectSites, selectDeviceId],
+  [selectSitesItems, selectDeviceId],
   (allSites, deviceId) => {
     if (!deviceId) return [];
     return allSites.filter((site) => site.device_id === deviceId);

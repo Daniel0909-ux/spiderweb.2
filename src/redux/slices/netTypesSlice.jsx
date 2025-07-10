@@ -3,32 +3,45 @@ import {
   createAsyncThunk,
   createEntityAdapter,
 } from "@reduxjs/toolkit";
-// import { api } from "../../services/api"; // LATER: Uncomment for real API
 import { initialData } from "../initialData";
-//import { api } from "../../services/api"; // <-- 1. Import the real api
 import { logout } from "./authSlice";
+
+// import { api } from "../../services/api"; // To be used for the real API
 
 // --- MOCK API: Simulates the backend API calls for NetTypes ---
 const mockApi = {
-  // Simulates fetching all network types.
   getNetTypes: async () => {
     await new Promise((resolve) => setTimeout(resolve, 50)); // Fast fetch
     return initialData.netTypes;
   },
-  // Simulates adding a new network type.
   addNetType: async (netTypeData) => {
     await new Promise((resolve) => setTimeout(resolve, 500));
     console.log("Mock API: Adding NetType...", netTypeData);
-    // In a real API, the backend would assign and return the new ID.
     const newNetType = { ...netTypeData, id: Date.now() };
     return newNetType;
   },
-  // Simulates deleting a network type.
   deleteNetType: async (netTypeId) => {
     await new Promise((resolve) => setTimeout(resolve, 500));
     console.log("Mock API: Deleting NetType with ID:", netTypeId);
     return { success: true };
   },
+};
+
+/**
+ * Normalizer Function (The "Bouncer")
+ * Safely processes the raw API response and guarantees a clean array.
+ * @param {any} apiResponse - The raw data from action.payload.
+ * @returns {Array} A safe array of NetType objects.
+ */
+const normalizeNetTypesApiResponse = (apiResponse) => {
+  if (Array.isArray(apiResponse)) {
+    return apiResponse;
+  }
+  console.warn(
+    "Could not normalize NetTypes API response. Expected an array, received:",
+    apiResponse
+  );
+  return [];
 };
 
 // --- ENTITY ADAPTER for efficient state management ---
@@ -44,14 +57,12 @@ const initialState = netTypesAdapter.getInitialState({
 
 // --- ASYNC THUNKS ---
 
-// 1. THUNK for FETCHING all network types
 export const fetchNetTypes = createAsyncThunk(
   "netTypes/fetchNetTypes",
   async (_, { rejectWithValue }) => {
     try {
-      // LATER: Replace with real API call: const response = await api.getNetTypes();
       const response = await mockApi.getNetTypes();
-      //const response = await api.getNetTypes(); // <-- 2. Import the real api
+      // const response = await api.getNetTypes(); // Use this for the real API
       return response;
     } catch (error) {
       return rejectWithValue(error.message);
@@ -59,7 +70,6 @@ export const fetchNetTypes = createAsyncThunk(
   }
 );
 
-// 2. THUNK for ADDING a new network type
 export const addNetType = createAsyncThunk(
   "netTypes/addNetType",
   async (netTypeData, { rejectWithValue }) => {
@@ -106,8 +116,11 @@ const netTypesSlice = createSlice({
       })
       .addCase(fetchNetTypes.fulfilled, (state, action) => {
         state.status = "succeeded";
-        // Use the adapter to efficiently set all items
-        netTypesAdapter.setAll(state, action.payload);
+        // Use the adapter and normalizer to safely set all items
+        netTypesAdapter.setAll(
+          state,
+          normalizeNetTypesApiResponse(action.payload)
+        );
       })
       .addCase(fetchNetTypes.rejected, (state, action) => {
         state.status = "failed";
@@ -136,11 +149,8 @@ const netTypesSlice = createSlice({
   },
 });
 
-// --- EXPORT ACTIONS ---
-// The async thunks `fetchNetTypes`, `addNetType`, and `deleteNetType` are the primary actions to be dispatched from the UI.
-
 // --- EXPORT SELECTORS ---
-// The adapter provides memoized selectors for free!
+// The adapter provides memoized selectors for free
 export const {
   selectAll: selectAllNetTypes,
   selectById: selectNetTypeById,

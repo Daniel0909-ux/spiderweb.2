@@ -1,28 +1,24 @@
 import React, { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { TableSkeleton } from "./feedback/TableSkeleton"; // We'll reuse our skeleton loader
+import { TableSkeleton } from "./feedback/TableSkeleton";
+import InterfaceDetailRow from "../../pages/dashboard/InterfaceDetailRow";
 
-/**
- * A reusable, high-performance virtualized table component.
- * It uses divs with ARIA roles for maximum rendering flexibility and performance.
- *
- * @param {object[]} data - The array of data to render.
- * @param {object[]} columns - An array of column definitions.
- *   Each column object should have:
- *   - `header`: The string or JSX for the column header.
- *   - `accessorKey`: The key in the data object for this column.
- *   - `cell`: A render function for the cell: (info) => JSX.
- *   - `size`: The flex-grow proportion for the column (e.g., 1, 2, 3).
- * @param {boolean} isLoading - If true, shows a skeleton loader.
- * @param {React.ReactNode} emptyMessage - JSX to display when data is empty.
- */
-export function VirtualizedTable({ data, columns, isLoading, emptyMessage }) {
+export function VirtualizedTable({
+  data,
+  columns,
+  isLoading,
+  emptyMessage,
+  onRowClick,
+  expandedRowId,
+}) {
   const parentRef = useRef(null);
 
   const rowVirtualizer = useVirtualizer({
     count: data.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 64,
+    // --- 3. Estimate size based on row type ---
+    // A normal row is 64px, a detail row is taller (e.g., 128px)
+    estimateSize: (index) => (data[index].isDetail ? 128 : 64),
     overscan: 5,
   });
 
@@ -61,17 +57,44 @@ export function VirtualizedTable({ data, columns, isLoading, emptyMessage }) {
       {/* Body */}
       <div
         className="relative w-full"
-        style={{
-          height: `${rowVirtualizer.getTotalSize()}px`,
-        }}
+        style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
       >
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-          const row = data[virtualRow.index];
+          const rowData = data[virtualRow.index];
+          const isDetailRow = rowData.isDetail;
+
+          const isSelected = rowData.id === expandedRowId;
+
+          if (isDetailRow) {
+            // The detail row should not have a hover effect, so it remains unchanged.
+            return (
+              <div
+                key={virtualRow.key}
+                className="absolute top-0 left-0 w-full"
+                style={{
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                <InterfaceDetailRow interfaceData={rowData.originalData} />
+              </div>
+            );
+          }
+
+          const rowClasses = [
+            "flex absolute top-0 left-0 w-full items-center border-b dark:border-gray-800/50 cursor-pointer",
+            "transition-colors duration-150 ease-in-out",
+            isSelected
+              ? "bg-sky-100 dark:bg-sky-900/60" // Selected state colors
+              : "hover:bg-sky-50 dark:hover:bg-sky-900/40", // Hover state colors
+          ].join(" ");
+
           return (
             <div
               key={virtualRow.key}
               role="row"
-              className="flex absolute top-0 left-0 w-full items-center border-b dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/20"
+              onClick={() => onRowClick && onRowClick(rowData.id)}
+              className={rowClasses} // <-- Use the dynamic classes
               style={{
                 height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start}px)`,
@@ -82,10 +105,9 @@ export function VirtualizedTable({ data, columns, isLoading, emptyMessage }) {
                   key={column.accessorKey}
                   role="gridcell"
                   className="px-4 py-2 truncate"
-                  // 👇 CHANGE HERE: Use flex-basis: 0% to ensure columns align perfectly
                   style={{ flex: `${column.size} 0 0%` }}
                 >
-                  {column.cell({ row })}
+                  {column.cell({ row: rowData })}
                 </div>
               ))}
             </div>

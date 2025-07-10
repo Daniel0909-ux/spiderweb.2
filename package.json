@@ -16,6 +16,7 @@
     "@tanstack/react-virtual": "^3.13.12",
     "axios": "^1.10.0",
     "d3": "^7.9.0",
+    "framer-motion": "^12.23.1",
     "js-cookie": "^3.0.5",
     "lucide-react": "^0.513.0",
     "react": "^19.1.0",

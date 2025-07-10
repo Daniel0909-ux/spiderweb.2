@@ -3,30 +3,57 @@ import {
   createSelector,
   createAsyncThunk,
 } from "@reduxjs/toolkit";
-// Assuming an apiService file exists to handle the actual HTTP requests
-// import { apiService } from "../../services/apiService";
 import { initialData } from "../initialData";
 
-//import { api } from "../../services/apiServices"; // <-- 1. Import the real api
+// import { api } from "../../services/apiServices"; // To be used for the real API
 
-// --- MOCK API ---
+// --- MOCK API: Simulates the backend API calls ---
 const mockApi = {
   getCorePikudim: async () => {
     await new Promise((resolve) => setTimeout(resolve, 200));
+    // The dummy data currently returns a direct array. Our normalizer will handle this
+    // and also be ready for a future change where it might be nested.
     return initialData.corePikudim;
   },
-  // Mocks for the new operations
   addCoreSite: async (siteData) => {
     await new Promise((resolve) => setTimeout(resolve, 500));
-    console.log("Mock API: Adding site...", siteData);
-    // In a real API, you'd get the newly created object back
+    console.log("Mock API: Adding core site...", siteData);
+    // Real API would return the newly created object with its ID
     return { ...siteData, id: Date.now(), timestamp: new Date().toISOString() };
   },
   deleteCoreSite: async (siteId) => {
     await new Promise((resolve) => setTimeout(resolve, 500));
-    console.log("Mock API: Deleting site with ID:", siteId);
+    console.log("Mock API: Deleting core site with ID:", siteId);
     return { success: true };
   },
+};
+
+/**
+ * Normalizer Function (The "Bouncer")
+ * Safely processes the raw API response and guarantees a clean array.
+ * @param {any} apiResponse - The raw data from action.payload.
+ * @returns {Array} A safe array of Pikudim/Core Site objects.
+ */
+const normalizePikudimApiResponse = (apiResponse) => {
+  // Check for common nested structures (e.g., { data: [...] } or { pikudim: [...] })
+  if (apiResponse && Array.isArray(apiResponse.data)) {
+    return apiResponse.data;
+  }
+  if (apiResponse && Array.isArray(apiResponse.pikudim)) {
+    return apiResponse.pikudim;
+  }
+
+  // Fallback for a direct array response (like our current mock data)
+  if (Array.isArray(apiResponse)) {
+    return apiResponse;
+  }
+
+  // If the format is unknown, log a warning and return a safe empty array.
+  console.warn(
+    "Could not normalize Core Pikudim API response. Data format is unexpected:",
+    apiResponse
+  );
+  return [];
 };
 
 // --- ASYNC THUNKS ---
@@ -36,9 +63,8 @@ export const fetchCorePikudim = createAsyncThunk(
   "corePikudim/fetchCorePikudim",
   async (_, { rejectWithValue }) => {
     try {
-      // const response = await apiService.getCorePikudim();
       const response = await mockApi.getCorePikudim();
-      //const response = await api.getCorePikudim(); // <-- 2. Use real api
+      // const response = await api.getCorePikudim(); // Use this for the real API
       return response;
     } catch (error) {
       return rejectWithValue(error.message);
@@ -51,16 +77,13 @@ export const addCoreSite = createAsyncThunk(
   "corePikudim/addCoreSite",
   async (siteData, { dispatch, rejectWithValue }) => {
     try {
-      // This is where you call your real backend API
-      // await apiService.addCorePikudim(siteData);
       await mockApi.addCoreSite(siteData);
+      // await api.addCorePikudim(siteData); // Use this for the real API
 
-      //await api.addCorePikudim(siteData); // <-- 3. Use real api
-
-      // On success, re-fetch the entire list to ensure data consistency
+      // On success, re-fetch the entire list to ensure data consistency.
+      // This is a simple and reliable "pessimistic" update approach.
       dispatch(fetchCorePikudim());
-
-      return siteData; // Return the original data for potential UI feedback
+      return siteData; // Return original data for potential UI feedback
     } catch (error) {
       return rejectWithValue(error.message);
     }
@@ -72,15 +95,11 @@ export const deleteCoreSite = createAsyncThunk(
   "corePikudim/deleteCoreSite",
   async (siteId, { dispatch, rejectWithValue }) => {
     try {
-      // This is where you call your real backend API
-      // await apiService.deleteCorePikudim(siteId);
       await mockApi.deleteCoreSite(siteId);
+      // await api.deleteCorePikudim(siteId); // Use this for the real API
 
-      //await api.deleteCorePikudim(siteId); // <-- 4. Use real api
-
-      // On success, re-fetch the list to reflect the deletion
+      // On success, re-fetch the list to reflect the deletion.
       dispatch(fetchCorePikudim());
-
       return siteId; // Return the deleted ID for potential UI feedback
     } catch (error) {
       return rejectWithValue(error.message);
@@ -96,10 +115,7 @@ const corePikudimSlice = createSlice({
     status: "idle", // 'idle' | 'loading' | 'succeeded' | 'failed'
     error: null,
   },
-  // Synchronous reducers are no longer needed for add/delete
   reducers: {},
-  // This handles the state changes for the FETCH thunk.
-  // We don't need to handle add/delete here because the re-fetch takes care of it.
   extraReducers: (builder) => {
     builder
       .addCase(fetchCorePikudim.pending, (state) => {
@@ -108,7 +124,8 @@ const corePikudimSlice = createSlice({
       })
       .addCase(fetchCorePikudim.fulfilled, (state, action) => {
         state.status = "succeeded";
-        state.items = action.payload;
+        // Use the normalizer to safely update the state
+        state.items = normalizePikudimApiResponse(action.payload);
       })
       .addCase(fetchCorePikudim.rejected, (state, action) => {
         state.status = "failed";
@@ -117,8 +134,10 @@ const corePikudimSlice = createSlice({
   },
 });
 
-// --- Export Selectors (Unchanged) ---
+// --- Export Selectors ---
 export const selectAllPikudim = (state) => state.corePikudim.items;
+export const selectCorePikudimStatus = (state) => state.corePikudim.status;
+export const selectCorePikudimError = (state) => state.corePikudim.error;
 
 export const selectPikudimById = (state, pikudimId) =>
   state.corePikudim.items.find((p) => p.id === pikudimId);
@@ -130,7 +149,10 @@ export const selectPikudimByTypeId = createSelector(
   [selectPikudimItems, selectTypeId],
   (pikudim, typeId) => {
     if (!typeId) return [];
-    return pikudim.filter((p) => p.type_id === typeId);
+    // Ensure `pikudim` is an array before filtering
+    return Array.isArray(pikudim)
+      ? pikudim.filter((p) => p.type_id === typeId)
+      : [];
   }
 );
 
