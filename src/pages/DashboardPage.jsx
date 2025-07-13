@@ -27,6 +27,8 @@ import { selectAllDevices } from "../redux/slices/devicesSlice";
 import { selectAllSites } from "../redux/slices/sitesSlice";
 import { selectAllTenGigLinks } from "../redux/slices/tenGigLinksSlice";
 
+import LinkForensicsPage from "./dashboard/LinkForensicsPage";
+
 // This helper component can be used by other pages like FavoritesPage
 function StatusIndicator({ status }) {
   const statusConfig = {
@@ -148,6 +150,11 @@ export function DashboardPage({
     <Routes>
       <Route path="/favorites" element={<FavoritesPage />} />
       <Route path="/all_interfaces" element={<AllInterfacesPage />} />
+
+      <Route
+        path="/forensics/link/:linkId"
+        element={<LinkForensicsPage theme={theme} />}
+      />
 
       {/* THE FIX: The chart routes are restructured to separate layouts for each sub-route. */}
       <Route

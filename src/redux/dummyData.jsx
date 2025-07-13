@@ -317,3 +317,125 @@ export const generateAllDummyData = () => {
     dummyUsers,
   };
 };
+
+// ... (at the end of your existing dummyData.js file)
+
+/**
+ * Generates detailed time-series data for a single link over a specified period.
+ * @param {string} linkId - The ID of the link to generate data for.
+ * @param {number} daysAgo - How many days of history to generate.
+ * @returns {object} An object containing different time-series datasets.
+ */
+export const generateLinkForensicsData = (linkId, daysAgo = 7) => {
+  const now = new Date();
+  const startTime = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+  const dataPoints = [];
+  const events = {
+    physical: [],
+    protocol: [],
+    cdp: [],
+  };
+
+  let currentTime = new Date(startTime.getTime());
+  let cdpNeighbor = {
+    device: "switch-abc-01",
+    port: "Gig0/24",
+    platform: "Catalyst 9300",
+  };
+
+  // Create base data points at 5-minute intervals
+  while (currentTime <= now) {
+    const timestamp = currentTime.getTime();
+
+    // Simulate bandwidth (with daily and hourly seasonality)
+    const hour = currentTime.getHours();
+    const day = currentTime.getDay();
+    const isPeakTime = hour >= 9 && hour <= 17 && day > 0 && day < 6;
+    const baseTx = isPeakTime
+      ? faker.number.int({ min: 4000, max: 8000 })
+      : faker.number.int({ min: 500, max: 2000 });
+    const baseRx = isPeakTime
+      ? faker.number.int({ min: 3000, max: 7000 })
+      : faker.number.int({ min: 400, max: 1500 });
+
+    dataPoints.push({
+      timestamp,
+      tx: baseTx + faker.number.int({ min: -200, max: 200 }),
+      rx: baseRx + faker.number.int({ min: -200, max: 200 }),
+      crcErrors: faker.helpers.weightedArrayElement([
+        { weight: 95, value: 0 },
+        { weight: 5, value: faker.number.int({ min: 1, max: 20 }) },
+      ]),
+      inputDrops: faker.helpers.weightedArrayElement([
+        { weight: 98, value: 0 },
+        { weight: 2, value: faker.number.int({ min: 1, max: 5 }) },
+      ]),
+      outputDrops: faker.helpers.weightedArrayElement([
+        { weight: 99, value: 0 },
+        { weight: 1, value: faker.number.int({ min: 1, max: 3 }) },
+      ]),
+    });
+    currentTime.setMinutes(currentTime.getMinutes() + 5);
+  }
+
+  // Sprinkle in some interesting events
+  const totalIntervals = dataPoints.length;
+
+  // A physical down event
+  if (totalIntervals > 100) {
+    const downStartIndex = faker.number.int({
+      min: 50,
+      max: totalIntervals - 50,
+    });
+    const downDuration = faker.number.int({ min: 3, max: 10 }); // in 5-min intervals
+    events.physical.push({
+      type: "down",
+      start: dataPoints[downStartIndex].timestamp,
+      end: dataPoints[downStartIndex + downDuration].timestamp,
+    });
+  }
+
+  // A protocol flap event
+  if (totalIntervals > 200) {
+    const flapIndex = faker.number.int({ min: 100, max: totalIntervals - 100 });
+    events.protocol.push({
+      type: "flap",
+      state: "Down",
+      start: dataPoints[flapIndex].timestamp,
+      end: dataPoints[flapIndex + 2].timestamp,
+    });
+    events.protocol.push({
+      type: "ospf_state_change",
+      state: "2-Way",
+      timestamp: dataPoints[flapIndex - 1].timestamp,
+    });
+  }
+
+  // A CDP neighbor change
+  if (totalIntervals > 300) {
+    const cdpChangeIndex = faker.number.int({
+      min: 150,
+      max: totalIntervals - 150,
+    });
+    const oldNeighbor = { ...cdpNeighbor };
+    cdpNeighbor = {
+      device: "firewall-xyz-02",
+      port: "Eth1/1",
+      platform: "Palo Alto 5220",
+    };
+    events.cdp.push({
+      type: "change",
+      timestamp: dataPoints[cdpChangeIndex].timestamp,
+      previous: oldNeighbor,
+      new: cdpNeighbor,
+    });
+  }
+
+  return {
+    linkId,
+    bandwidthData: dataPoints,
+    eventData: events,
+    maxBandwidth: 10000, // Mbps
+    currentStatus: { physical: "Up", protocol: "Up" },
+  };
+};

@@ -2,7 +2,14 @@
 
 import React, { useState, useMemo } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { Star, ArrowUp, ArrowDown, XCircle, Search } from "lucide-react";
+import {
+  Star,
+  ArrowUp,
+  ArrowDown,
+  XCircle,
+  Search,
+  BarChart2,
+} from "lucide-react"; // <-- Import a new icon
 
 // --- Custom Hooks & Slices ---
 import { useInterfaceData } from "../useInterfaceData";
@@ -12,6 +19,8 @@ import { fetchInitialData } from "../../redux/slices/authSlice"; // For the retr
 import { Button } from "../../components/ui/button";
 import { VirtualizedTable } from "../../components/ui/VirtualizedTable";
 import { ErrorMessage } from "../../components/ui/feedback/ErrorMessage";
+
+import { useNavigate } from "react-router-dom";
 
 // --- Status Selectors ---
 const selectSitesStatus = (state) => state.sites.status;
@@ -58,6 +67,7 @@ const FavoriteButton = ({ isFavorite, onClick }) => (
 // --- Main Page Component ---
 export default function AllInterfacesPage() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { interfaces, handleToggleFavorite, deviceFilterOptions } =
     useInterfaceData();
 
@@ -202,8 +212,31 @@ export default function AllInterfacesPage() {
           </div>
         ),
       },
+      {
+        accessorKey: "actions",
+        header: "Actions",
+        size: 1.5, // Make it a bit wider to fit both buttons
+        cell: ({ row }) => (
+          <div className="flex justify-end items-center gap-1">
+            {/* The new statistics button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent the row click from firing
+                // Navigate to the new forensics page with the link's ID
+                navigate(`/forensics/link/${row.id}`);
+              }}
+              aria-label="View Link Statistics"
+              title="View Link Statistics"
+            >
+              <BarChart2 className="h-5 w-5 text-gray-400 hover:text-blue-500" />
+            </Button>
+          </div>
+        ),
+      },
     ],
-    [handleToggleFavorite]
+    [handleToggleFavorite, navigate]
   );
 
   const handleRetry = () => {
