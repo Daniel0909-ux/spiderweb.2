@@ -61,6 +61,29 @@ export const api = {
     return response.data.access_token;
   },
 
+  // --- NEW GET Endpoints ---
+  /**
+   * Fetches all networks.
+   * @returns {Promise<Array<{id: number|string, name: string}>>} A list of all networks.
+   */
+  getNetworks: () => handleApiCall(apiClient.get("/networks")),
+
+  /**
+   * Fetches all core sites for a given network ID.
+   * @param {string|number} networkId - The ID of the network.
+   * @returns {Promise<Array<{id: number|string, name: string}>>} A list of core sites for that network.
+   */
+  getCoreSitesByNetwork: (networkId) =>
+    handleApiCall(apiClient.get(`/networks/${networkId}/coresites`)),
+
+  /**
+   * Fetches all core devices for a given network ID.
+   * @param {string|number} networkId - The ID of the network.
+   * @returns {Promise<Array<{id: number|string, name: string, ip: string}>>} A list of core devices for that network.
+   */
+  getCoreDevicesByNetwork: (networkId) =>
+    handleApiCall(apiClient.get(`/networks/${networkId}/coredevices`)),
+
   // --- GET Endpoints ---
   getTenGigLines: () => handleApiCall(apiClient.get("/get_ten_gig_lines")),
   getNetTypes: () => handleApiCall(apiClient.get("/get_net_types")),

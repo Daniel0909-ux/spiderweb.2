@@ -91,6 +91,8 @@ export default function LinkForensicsPage({ theme = "dark" }) {
   const headerTextColor = isDark ? "text-white" : "text-slate-900";
   const subHeaderTextColor = isDark ? "text-slate-400" : "text-slate-500";
 
+  console.log(data.bandwidthData);
+
   return (
     <div
       className={`p-6 min-h-screen transition-colors duration-300 ${pageBgClass}`}

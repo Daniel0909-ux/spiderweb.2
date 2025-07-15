@@ -10,6 +10,30 @@ import {
   Legend,
 } from "recharts";
 
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="p-3 bg-slate-700/80 text-white rounded-lg border border-slate-600 shadow-xl text-sm backdrop-blur-sm">
+        <p className="font-bold mb-2">{new Date(label).toLocaleString()}</p>
+        <div className="space-y-1">
+          {payload.map((pld, i) => (
+            // Use pld.fill for BarChart color, pld.color/stroke for AreaChart
+            <div
+              key={i}
+              style={{ color: pld.fill }}
+              className="flex items-center"
+            >
+              <span className="font-semibold">{`${pld.name}: `}</span>
+              <span className="ml-2 font-mono">{pld.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 export const ErrorChart = ({ data, theme }) => {
   const isDark = theme === "dark";
   const textColor = isDark ? "#94a3b8" : "#64748b";
@@ -44,7 +68,10 @@ export const ErrorChart = ({ data, theme }) => {
             stroke={axisStroke}
           />
           <YAxis tick={{ fill: textColor, fontSize: 12 }} stroke={axisStroke} />
-          <Tooltip /* ... (tooltip can remain dark) ... */ />
+          <Tooltip
+            cursor={{ fill: "rgba(100, 116, 139, 0.2)" }}
+            content={<CustomTooltip />}
+          />
           <Legend wrapperStyle={{ color: textColor }} iconType="circle" />
           <Bar
             dataKey="crcErrors"
