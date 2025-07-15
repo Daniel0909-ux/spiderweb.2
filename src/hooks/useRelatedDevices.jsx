@@ -1,10 +1,10 @@
 import { useMemo } from "react";
 import { useSelector } from "react-redux";
-import { selectAllDevices } from "../redux/slices/devicesSlice";
+import { selectAllCoreDevices } from "../redux/slices/coreDevicesSlice";
 import { selectAllCoreSites } from "../redux/slices/coreSitesSlice";
 
 export function useRelatedDevices(currentDeviceName, currentZoneName) {
-  const allDevices = useSelector(selectAllDevices);
+  const allDevices = useSelector(selectAllCoreDevices);
   const allCoreSites = useSelector(selectAllCoreSites);
 
   const relatedDevices = useMemo(() => {
@@ -28,14 +28,12 @@ export function useRelatedDevices(currentDeviceName, currentZoneName) {
     }
     const currentSiteId = currentCoreSite.id;
 
-    // The property name `core_pikudim_site_id` on the device object might also need
-    // updating depending on the backend, but we'll assume it's still correct for now.
     const devicesInSameSite = allDevices.filter(
-      (device) => device.core_pikudim_site_id === currentSiteId
+      (device) => device.core_site_id === currentSiteId
     );
 
     const otherDevices = devicesInSameSite.filter(
-      (device) => device.hostname !== currentDeviceName
+      (device) => device.hostname !== currentDeviceName // Assuming the device object still has 'hostname'
     );
 
     return otherDevices.map((device) => ({

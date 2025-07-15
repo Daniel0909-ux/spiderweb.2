@@ -8,25 +8,25 @@ import LinkDetailTabs from "../../components/shared/LinkDetailTabs";
 import ToggleDetailButton from "../../components/chart/ToggleDetailButton";
 import { fetchInitialData } from "../../redux/slices/authSlice";
 
-// --- Data Selectors (Updated) ---
+// --- UPDATED: Data and Status Selectors from the new Redux slices ---
 import {
   selectCoreSitesByNetworkId,
   selectCoreSitesStatus,
 } from "../../redux/slices/coreSitesSlice";
 import {
-  selectDevicesByTypeId,
-  selectDevicesStatus,
-} from "../../redux/slices/devicesSlice";
+  selectAllCoreDevices,
+  selectCoreDevicesStatus,
+} from "../../redux/slices/coreDevicesSlice";
 import {
   selectLinksByTypeId,
-  selectLinksStatus,
+  selectTenGigLinksStatus,
 } from "../../redux/slices/tenGigLinksSlice";
 
 // --- Feedback Components ---
 import { LoadingSpinner } from "../../components/ui/feedback/LoadingSpinner";
 import { ErrorMessage } from "../../components/ui/feedback/ErrorMessage";
 
-// Helper function to select top devices (no changes)
+// Helper function to select top devices (this logic is unchanged)
 function selectTopTwoDevices(devices) {
   if (devices.length <= 2) return devices;
   const priorityOrder = [4, 5, 1, 2, 7, 8];
@@ -46,33 +46,42 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  // --- Get the status of each required slice (Updated) ---
-  const coreSitesStatus = useSelector(selectCoreSitesStatus);
-  const devicesStatus = useSelector(selectDevicesStatus);
-  const linksStatus = useSelector(selectLinksStatus);
-
-  // Local UI state
+  // --- Local UI state (unchanged) ---
   const [openLinkTabs, setOpenLinkTabs] = useState([]);
   const [activeLinkTabId, setActiveLinkTabId] = useState(null);
   const [showDetailedLinks, setShowDetailedLinks] = useState(false);
 
-  // --- IMPORTANT: Selectors use networkId: 2 for P-Chart data ---
+  // --- UPDATED: Get the status of each required slice ---
+  const coreSitesStatus = useSelector(selectCoreSitesStatus);
+  const devicesStatus = useSelector(selectCoreDevicesStatus);
+  const linksStatus = useSelector(selectTenGigLinksStatus);
+
+  // --- UPDATED: Data selectors for P-Chart (networkId: 2) ---
+  // 1. Get core sites specifically for this network (P-Chart).
   const coreSites = useSelector((state) =>
     selectCoreSitesByNetworkId(state, 2)
   );
-  const allDevicesForType = useSelector((state) =>
-    selectDevicesByTypeId(state, 2)
-  );
+  // 2. Get ALL core devices. We will filter them in the memoized selector below.
+  const allCoreDevices = useSelector(selectAllCoreDevices);
+  // 3. Get links (assuming this slice wasn't changed and still filters by a typeId).
   const linksRaw = useSelector((state) => selectLinksByTypeId(state, 2));
 
-  // Memoized data transformation for the graph
+  // --- UPDATED: Memoized transformation to create graph data ---
   const graphData = useMemo(() => {
-    if (!coreSites.length || !allDevicesForType.length) {
+    // Guard clause: Don't run if the essential data isn't loaded yet.
+    if (!coreSites.length || !allCoreDevices.length) {
       return { nodes: [], links: [] };
     }
 
+    // A. Filter all devices to get only those belonging to the sites of this network.
+    const coreSiteIdsForNetwork = new Set(coreSites.map((site) => site.id));
+    const allDevicesForType = allCoreDevices.filter((device) =>
+      coreSiteIdsForNetwork.has(device.core_site_id)
+    );
+
+    // B. Group the filtered devices by their parent site ID.
     const devicesByCoreSiteId = allDevicesForType.reduce((acc, device) => {
-      const siteId = device.core_pikudim_site_id;
+      const siteId = device.core_site_id;
       if (!acc[siteId]) {
         acc[siteId] = [];
       }
@@ -80,23 +89,25 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
       return acc;
     }, {});
 
+    // C. Select the top N devices from each site group for visualization.
     const topDevicesPerSite = Object.values(devicesByCoreSiteId).flatMap(
       (deviceGroup) => selectTopTwoDevices(deviceGroup)
     );
-
     const visibleDeviceHostnames = new Set(
       topDevicesPerSite.map((d) => d.hostname)
     );
 
+    // D. Create a lookup map for site names.
     const coreSiteMap = coreSites.reduce((acc, site) => {
       acc[site.id] = site;
       return acc;
     }, {});
 
+    // E. Transform the data into the final `nodes` and `links` format for D3.
     const transformedNodes = topDevicesPerSite.map((device) => ({
       id: device.hostname,
       group: "node",
-      zone: coreSiteMap[device.core_pikudim_site_id]?.name || "Unknown Zone",
+      zone: coreSiteMap[device.core_site_id]?.name || "Unknown Zone", // Use .name from site
     }));
 
     const transformedLinks = linksRaw
@@ -113,22 +124,18 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
       }));
 
     return { nodes: transformedNodes, links: transformedLinks };
-  }, [coreSites, allDevicesForType, linksRaw]);
+  }, [coreSites, allCoreDevices, linksRaw]); // The dependency array is updated
 
-  // All event handlers (unchanged)
+  // --- All event handlers are unchanged ---
   const handleZoneClick = useCallback(
-    (zoneId) => {
-      navigate(`zone/${zoneId}`);
-    },
+    (zoneId) => navigate(`zone/${zoneId}`),
     [navigate]
   );
 
   const handleNodeClick = useCallback(
     (nodeData) => {
-      if (nodeData && nodeData.id && nodeData.zone) {
+      if (nodeData?.id && nodeData?.zone) {
         navigate(`zone/${nodeData.zone}/node/${nodeData.id}`);
-      } else {
-        console.warn("Node data incomplete for navigation:", nodeData);
       }
     },
     [navigate]
@@ -138,7 +145,6 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
     (linkDetailPayload) => {
       const { id, sourceNode, targetNode } = linkDetailPayload;
       const tabExists = openLinkTabs.some((tab) => tab.id === id);
-
       if (!tabExists) {
         const newTab = {
           id: id,
@@ -158,11 +164,11 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
       setOpenLinkTabs((prevTabs) => {
         const remainingTabs = prevTabs.filter((tab) => tab.id !== tabIdToClose);
         if (activeLinkTabId === tabIdToClose) {
-          if (remainingTabs.length > 0) {
-            setActiveLinkTabId(remainingTabs[remainingTabs.length - 1].id);
-          } else {
-            setActiveLinkTabId(null);
-          }
+          setActiveLinkTabId(
+            remainingTabs.length > 0
+              ? remainingTabs[remainingTabs.length - 1].id
+              : null
+          );
         }
         return remainingTabs;
       });
@@ -176,7 +182,7 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
 
   const handleRetry = () => dispatch(fetchInitialData());
 
-  // Component-specific derived states for rendering logic (Updated)
+  // --- UPDATED: Component-specific loading, error, and empty state logic ---
   const isLoading =
     coreSitesStatus === "loading" ||
     devicesStatus === "loading" ||
@@ -189,12 +195,10 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
 
   const isDataEmpty = !isLoading && !hasError && graphData.nodes.length === 0;
 
-  // Render loading state
   if (isLoading) {
     return <LoadingSpinner text="Building P-Chart..." />;
   }
 
-  // Render error state if any dependency fails
   if (hasError) {
     return (
       <ErrorMessage
@@ -204,7 +208,6 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
     );
   }
 
-  // Render empty state if data loads successfully but is empty
   if (isDataEmpty) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center p-4 text-center">
@@ -218,7 +221,7 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
     );
   }
 
-  // Original component return for successful data load
+  // --- Original component return for a successful data load (unchanged) ---
   return (
     <div className="w-full h-full flex flex-col">
       {openLinkTabs.length > 0 && (

@@ -2,7 +2,7 @@
 
 import { configureStore, combineReducers } from "@reduxjs/toolkit";
 import sitesReducer from "./slices/sitesSlice";
-import devicesReducer from "./slices/devicesSlice";
+import coreDevicesReducer from "./slices/coreDevicesSlice";
 import tenGigLinksReducer from "./slices/tenGigLinksSlice";
 import coreSitesReducer from "./slices/coreSitesSlice";
 import favoritesReducer from "./slices/favoritesSlice";
@@ -16,7 +16,7 @@ import realtimeMiddleware from "./middleware/realtimeMiddleware";
 // 1. Combine all your slice reducers into a single "app" reducer
 const appReducer = combineReducers({
   sites: sitesReducer,
-  devices: devicesReducer,
+  coreDevices: coreDevicesReducer,
   tenGigLinks: tenGigLinksReducer,
   coreSites: coreSitesReducer,
   favorites: favoritesReducer,

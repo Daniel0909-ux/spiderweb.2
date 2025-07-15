@@ -7,30 +7,37 @@ import { api } from "../../services/api";
 // --- CHANGE 1: Import the new `fetchNetworks` thunk ---
 import { fetchNetworks } from "./networksSlice";
 import { fetchAllCoreSites } from "./coreSitesSlice";
-import { fetchDevices } from "./devicesSlice";
+import { fetchAllCoreDevices } from "./coreDevicesSlice";
 import { fetchSites } from "./sitesSlice";
 import { fetchTenGigLinks } from "./tenGigLinksSlice";
 
 // This thunk's only job is to dispatch all the other data-fetching actions in parallel.
 export const fetchInitialData = createAsyncThunk(
   "auth/fetchInitialData",
-  async (_, { dispatch }) => {
-    // Step A: Fetch networks first and wait for the result.
+  async (_, { dispatch, getState }) => {
+    // Step A: Fetch networks first.
     const networksAction = await dispatch(fetchNetworks());
 
-    // Step B: If networks were fetched successfully, get their IDs.
+    // Step B: If networks were fetched, fetch their core sites.
     if (fetchNetworks.fulfilled.match(networksAction)) {
       const networks = networksAction.payload;
       const networkIds = Array.isArray(networks)
         ? networks.map((n) => n.id)
         : [];
 
-      // Step C: Dispatch the fetches for all data that depends on network IDs.
       if (networkIds.length > 0) {
-        dispatch(fetchAllCoreSites(networkIds));
+        // This thunk dispatches many individual fetches. We wait for the "master" thunk to complete.
+        await dispatch(fetchAllCoreSites(networkIds));
+
+        // Step C: Now that sites are fetched, get all their IDs from the state to fetch their devices.
+        const allCoreSites = getState().coreSites.entities;
+        const allCoreSiteIds = Object.keys(allCoreSites);
+
+        if (allCoreSiteIds.length > 0) {
+          await dispatch(fetchAllCoreDevices(allCoreSiteIds));
+        }
       }
     }
-    dispatch(fetchDevices());
     dispatch(fetchSites());
     dispatch(fetchTenGigLinks());
   }

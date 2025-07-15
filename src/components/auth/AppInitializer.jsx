@@ -12,20 +12,26 @@ import { startConnecting } from "../../redux/slices/realtimeSlice";
 import { fetchAllAlerts } from "../../redux/slices/alertsSlice";
 import { Loader2, AlertTriangle } from "lucide-react";
 
-// Selectors for core data status (no changes here)
-const selectCoreSitesStatus = (state) => state.coreSites.status;
-const selectDevicesStatus = (state) => state.devices.status;
-const selectLinksStatus = (state) => state.tenGigLinks.status;
-const selectSitesStatus = (state) => state.sites.status;
+// --- CORRECTED: Import all the necessary status selectors directly ---
+import { selectCoreSitesStatus } from "../../redux/slices/coreSitesSlice";
+import { selectCoreDevicesStatus } from "../../redux/slices/coreDevicesSlice";
+import { selectTenGigLinksStatus } from "../../redux/slices/tenGigLinksSlice";
+import { selectSitesStatus } from "../../redux/slices/sitesSlice";
 
+// This selector now directly uses the imported selectors. This is the correct pattern.
 const selectCoreDataStatus = createSelector(
   [
     selectCoreSitesStatus,
-    selectDevicesStatus,
-    selectLinksStatus,
+    selectCoreDevicesStatus, // <<< The imported selector is now used here.
+    selectTenGigLinksStatus,
     selectSitesStatus,
   ],
-  (coreSites, devices, links, sites) => ({ coreSites, devices, links, sites })
+  (coreSites, coreDevices, links, sites) => ({
+    coreSites,
+    coreDevices,
+    links,
+    sites,
+  })
 );
 
 export function AppInitializer({ children }) {
@@ -46,24 +52,20 @@ export function AppInitializer({ children }) {
     (s) => s === "succeeded"
   );
 
-  // Effect for fetching initial data (no change)
   useEffect(() => {
     if (isAuthIdle) {
       dispatch(fetchInitialData());
     }
   }, [isAuthIdle, dispatch]);
 
-  // Effect for starting real-time connection and alerts polling (no change)
   useEffect(() => {
     let intervalId;
-
     if (hasSomeDataSucceeded) {
       dispatch(startConnecting());
       intervalId = setInterval(() => {
         dispatch(fetchAllAlerts());
       }, 30000);
     }
-
     return () => {
       if (intervalId) {
         clearInterval(intervalId);
@@ -71,15 +73,10 @@ export function AppInitializer({ children }) {
     };
   }, [hasSomeDataSucceeded, dispatch]);
 
-  // THIS FUNCTION IS NOW USED
   const handleRetry = () => {
-    // This action will re-trigger the entire data loading process.
     dispatch(fetchInitialData());
   };
 
-  // --- RENDERING LOGIC ---
-
-  // Loading screen (no change)
   if (isAuthLoading || !isInitialDataLoadFinished) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-gray-100 dark:bg-gray-950">
@@ -96,7 +93,6 @@ export function AppInitializer({ children }) {
     );
   }
 
-  // Fatal error screen (NOW WITH RETRY BUTTON)
   if (isAuthFailed) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-gray-100 dark:bg-gray-950">
@@ -109,7 +105,6 @@ export function AppInitializer({ children }) {
             {authError ||
               "Could not validate your session. Please try logging in again."}
           </p>
-          {/* --- THE FIX IS HERE --- */}
           <button
             onClick={handleRetry}
             className="mt-6 px-6 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition-colors"
@@ -121,6 +116,5 @@ export function AppInitializer({ children }) {
     );
   }
 
-  // If we reach this point, render the main application.
   return children;
 }
