@@ -66,15 +66,15 @@ export const api = {
    * @returns {Promise<Array<{id: number|string, name: string}>>} A list of core sites for that network.
    */
   getCoreSitesByNetwork: (networkId) =>
-    handleApiCall(apiClient.get(`/networks/${networkId}/coresites`)),
+    handleApiCall(apiClient.get(`/network/${networkId}/coresites`)),
 
   /**
    * Fetches all core devices for a given network ID.
    * @param {string|number} networkId - The ID of the network.
    * @returns {Promise<Array<{id: number|string, name: string, ip: string}>>} A list of core devices for that network.
    */
-  getCoreDevicesByNetwork: (networkId) =>
-    handleApiCall(apiClient.get(`/networks/${networkId}/coredevices`)),
+  getCoreDevicesByCoreSite: (coresiteId) =>
+    handleApiCall(apiClient.get(`/coresite/${coresiteId}/coredevices`)),
   //
   //
   //
