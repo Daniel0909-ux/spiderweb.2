@@ -1,13 +1,9 @@
 import axios from "axios";
 import Cookies from "js-cookie";
 
-// --- Configuration ---
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 
-//REACT_APP_API_URL=http://your-backend-api.com/api (instead of VITE_API_URL || "http://localhost:8000/api";)
-
-// --- Create a Centralized Axios Instance ---
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -15,10 +11,8 @@ const apiClient = axios.create({
   },
 });
 
-// --- Axios Interceptor for Authentication ---
 apiClient.interceptors.request.use(
   (config) => {
-    // The name of the cookie must match where you store it after login
     const token = Cookies.get("authToken");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -30,35 +24,33 @@ apiClient.interceptors.request.use(
   }
 );
 
-// --- API Helper Function ---
-/**
- * A helper function to handle API calls and potential errors.
- * It assumes the backend returns data directly (not wrapped in a "response" key).
- * @param {Promise} request - The axios request promise.
- * @returns {Promise<any>} A promise that resolves to the response data.
- */
 const handleApiCall = async (request) => {
   try {
     const response = await request;
     return response.data;
   } catch (error) {
     console.error("API call failed:", error.response || error.message);
-    // Re-throw the error so the calling component/thunk can handle it (e.g., show a UI message)
     throw error;
   }
 };
 
 export const api = {
-  // --- AUTHENTICATION ---
-  /**
-   * Logs in a user and returns the access token.
-   * @param {string} username - The user's username.
-   * @param {string} password - The user's password.
-   * @returns {Promise<string>} The authentication token.
-   */
   login: async (username, password) => {
     const response = await apiClient.post("/login", { username, password });
-    return response.data.access_token;
+    const token = response.data.token;
+
+    if (token) {
+      Cookies.set("authToken", token, {
+        expires: 7,
+        secure: true,
+        sameSite: "Strict",
+      });
+    }
+    return token;
+  },
+
+  logout: () => {
+    Cookies.remove("authToken");
   },
 
   // --- NEW GET Endpoints ---
@@ -83,6 +75,20 @@ export const api = {
    */
   getCoreDevicesByNetwork: (networkId) =>
     handleApiCall(apiClient.get(`/networks/${networkId}/coredevices`)),
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
 
   // --- GET Endpoints ---
   getTenGigLines: () => handleApiCall(apiClient.get("/get_ten_gig_lines")),
