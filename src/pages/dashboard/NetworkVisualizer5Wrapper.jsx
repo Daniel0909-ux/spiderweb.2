@@ -1,4 +1,4 @@
-// src/components/NetworkVisualizer5Wrapper.jsx
+// src/components/dashboard/NetworkVisualizer5Wrapper.jsx
 
 import React, { useCallback, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -8,15 +8,19 @@ import LinkDetailTabs from "../../components/shared/LinkDetailTabs";
 import ToggleDetailButton from "../../components/chart/ToggleDetailButton";
 import { fetchInitialData } from "../../redux/slices/authSlice";
 
-// --- Data Selectors ---
-import { selectPikudimByTypeId } from "../../redux/slices/corePikudimSlice";
-import { selectDevicesByTypeId } from "../../redux/slices/devicesSlice";
-import { selectLinksByTypeId } from "../../redux/slices/tenGigLinksSlice";
-
-// --- NEW: Import Status Selectors ---
-const selectPikudimStatus = (state) => state.corePikudim.status;
-const selectDevicesStatus = (state) => state.devices.status;
-const selectLinksStatus = (state) => state.tenGigLinks.status;
+// --- Data Selectors (Updated) ---
+import {
+  selectCoreSitesByNetworkId,
+  selectCoreSitesStatus,
+} from "../../redux/slices/coreSitesSlice";
+import {
+  selectDevicesByTypeId,
+  selectDevicesStatus,
+} from "../../redux/slices/devicesSlice";
+import {
+  selectLinksByTypeId,
+  selectLinksStatus,
+} from "../../redux/slices/tenGigLinksSlice";
 
 // --- Feedback Components ---
 import { LoadingSpinner } from "../../components/ui/feedback/LoadingSpinner";
@@ -42,8 +46,8 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  // --- NEW: Get the status of each required slice ---
-  const pikudimStatus = useSelector(selectPikudimStatus);
+  // --- Get the status of each required slice (Updated) ---
+  const coreSitesStatus = useSelector(selectCoreSitesStatus);
   const devicesStatus = useSelector(selectDevicesStatus);
   const linksStatus = useSelector(selectLinksStatus);
 
@@ -52,8 +56,10 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
   const [activeLinkTabId, setActiveLinkTabId] = useState(null);
   const [showDetailedLinks, setShowDetailedLinks] = useState(false);
 
-  // --- IMPORTANT: Selectors use typeId: 2 for P-Chart data ---
-  const pikudim = useSelector((state) => selectPikudimByTypeId(state, 2));
+  // --- IMPORTANT: Selectors use networkId: 2 for P-Chart data ---
+  const coreSites = useSelector((state) =>
+    selectCoreSitesByNetworkId(state, 2)
+  );
   const allDevicesForType = useSelector((state) =>
     selectDevicesByTypeId(state, 2)
   );
@@ -61,11 +67,11 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
 
   // Memoized data transformation for the graph
   const graphData = useMemo(() => {
-    if (!pikudim.length || !allDevicesForType.length) {
+    if (!coreSites.length || !allDevicesForType.length) {
       return { nodes: [], links: [] };
     }
 
-    const devicesByPikudId = allDevicesForType.reduce((acc, device) => {
+    const devicesByCoreSiteId = allDevicesForType.reduce((acc, device) => {
       const siteId = device.core_pikudim_site_id;
       if (!acc[siteId]) {
         acc[siteId] = [];
@@ -74,24 +80,23 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
       return acc;
     }, {});
 
-    const topDevicesPerPikud = Object.values(devicesByPikudId).flatMap(
+    const topDevicesPerSite = Object.values(devicesByCoreSiteId).flatMap(
       (deviceGroup) => selectTopTwoDevices(deviceGroup)
     );
 
     const visibleDeviceHostnames = new Set(
-      topDevicesPerPikud.map((d) => d.hostname)
+      topDevicesPerSite.map((d) => d.hostname)
     );
 
-    const pikudimMap = pikudim.reduce((acc, p) => {
-      acc[p.id] = p;
+    const coreSiteMap = coreSites.reduce((acc, site) => {
+      acc[site.id] = site;
       return acc;
     }, {});
-    const transformedNodes = topDevicesPerPikud.map((device) => ({
+
+    const transformedNodes = topDevicesPerSite.map((device) => ({
       id: device.hostname,
       group: "node",
-      zone:
-        pikudimMap[device.core_pikudim_site_id]?.core_site_name ||
-        "Unknown Zone",
+      zone: coreSiteMap[device.core_pikudim_site_id]?.name || "Unknown Zone",
     }));
 
     const transformedLinks = linksRaw
@@ -108,7 +113,7 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
       }));
 
     return { nodes: transformedNodes, links: transformedLinks };
-  }, [pikudim, allDevicesForType, linksRaw]);
+  }, [coreSites, allDevicesForType, linksRaw]);
 
   // All event handlers (unchanged)
   const handleZoneClick = useCallback(
@@ -171,14 +176,14 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
 
   const handleRetry = () => dispatch(fetchInitialData());
 
-  // --- NEW: Component-specific derived states for rendering logic ---
+  // Component-specific derived states for rendering logic (Updated)
   const isLoading =
-    pikudimStatus === "loading" ||
+    coreSitesStatus === "loading" ||
     devicesStatus === "loading" ||
     linksStatus === "loading";
 
   const hasError =
-    pikudimStatus === "failed" ||
+    coreSitesStatus === "failed" ||
     devicesStatus === "failed" ||
     linksStatus === "failed";
 
@@ -213,7 +218,7 @@ const NetworkVisualizer5Wrapper = ({ theme }) => {
     );
   }
 
-  // --- Original component return for successful data load ---
+  // Original component return for successful data load
   return (
     <div className="w-full h-full flex flex-col">
       {openLinkTabs.length > 0 && (

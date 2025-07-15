@@ -54,14 +54,15 @@ export const api = {
   },
 
   // --- NEW GET Endpoints ---
+
   /**
-   * Fetches all networks.
+   * Fetches all networks. Replaces get_net_types.
    * @returns {Promise<Array<{id: number|string, name: string}>>} A list of all networks.
    */
   getNetworks: () => handleApiCall(apiClient.get("/networks")),
 
   /**
-   * Fetches all core sites for a given network ID.
+   * Fetches all core sites for a given network ID. Replaces get_core_pikudim.
    * @param {string|number} networkId - The ID of the network.
    * @returns {Promise<Array<{id: number|string, name: string}>>} A list of core sites for that network.
    */
@@ -69,12 +70,12 @@ export const api = {
     handleApiCall(apiClient.get(`/network/${networkId}/coresites`)),
 
   /**
-   * Fetches all core devices for a given network ID.
-   * @param {string|number} networkId - The ID of the network.
-   * @returns {Promise<Array<{id: number|string, name: string, ip: string}>>} A list of core devices for that network.
+   * Fetches all core devices for a given core site ID. Replaces get_core_devices.
+   * @param {string|number} coreSiteId - The ID of the core site.
+   * @returns {Promise<Array<{id: number|string, name: string, ip: string}>>} A list of core devices for that site.
    */
-  getCoreDevicesByCoreSite: (coresiteId) =>
-    handleApiCall(apiClient.get(`/coresite/${coresiteId}/coredevices`)),
+  getCoreDevicesByCoreSite: (coreSiteId) =>
+    handleApiCall(apiClient.get(`/coresite/${coreSiteId}/coredevices`)),
   //
   //
   //
@@ -92,20 +93,10 @@ export const api = {
 
   // --- GET Endpoints ---
   getTenGigLines: () => handleApiCall(apiClient.get("/get_ten_gig_lines")),
-  getNetTypes: () => handleApiCall(apiClient.get("/get_net_types")),
-  getCorePikudim: () => handleApiCall(apiClient.get("/get_core_pikudim")),
-  getCoreDevices: () => handleApiCall(apiClient.get("/get_core_devices")),
+  //getNetTypes: () => handleApiCall(apiClient.get("/get_net_types")),
+  //getCorePikudim: () => handleApiCall(apiClient.get("/get_core_pikudim")),
+  //getCoreDevices: () => handleApiCall(apiClient.get("/get_core_devices")),
   getSites: () => handleApiCall(apiClient.get("/get_sites")),
-  getDeviceInfo: (deviceId) =>
-    handleApiCall(apiClient.get(`/get_device_info/${deviceId}`)),
-  getDevicesByCorePikudim: (corePikudimId) =>
-    handleApiCall(
-      apiClient.get(`/get_devices_by_core_pikudim/${corePikudimId}`)
-    ),
-  getSiteBandwidth: (siteName) =>
-    handleApiCall(apiClient.get(`/get_site_bw/${siteName}`)),
-  getInterfacesUp: (siteName) =>
-    handleApiCall(apiClient.get(`/get_interfaces_up/${siteName}`)),
 
   // --- POST (Create/Add) Endpoints ---
   addCorePikudim: (pikudData) =>

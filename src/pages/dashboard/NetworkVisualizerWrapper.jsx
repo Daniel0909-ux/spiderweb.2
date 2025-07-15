@@ -1,4 +1,4 @@
-// src/components/NetworkVisualizerWrapper.jsx
+// src/components/dashboard/NetworkVisualizerWrapper.jsx
 
 import React, { useCallback, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -8,15 +8,19 @@ import LinkDetailTabs from "../../components/shared/LinkDetailTabs";
 import ToggleDetailButton from "../../components/chart/ToggleDetailButton";
 import { fetchInitialData } from "../../redux/slices/authSlice";
 
-// --- Data Selectors ---
-import { selectPikudimByTypeId } from "../../redux/slices/corePikudimSlice";
-import { selectDevicesByTypeId } from "../../redux/slices/devicesSlice";
-import { selectLinksByTypeId } from "../../redux/slices/tenGigLinksSlice";
-
-// --- NEW: Import Status Selectors ---
-const selectPikudimStatus = (state) => state.corePikudim.status;
-const selectDevicesStatus = (state) => state.devices.status;
-const selectLinksStatus = (state) => state.tenGigLinks.status;
+// --- Data Selectors (Updated) ---
+import {
+  selectCoreSitesByNetworkId,
+  selectCoreSitesStatus,
+} from "../../redux/slices/coreSitesSlice";
+import {
+  selectDevicesByTypeId,
+  selectDevicesStatus,
+} from "../../redux/slices/devicesSlice";
+import {
+  selectLinksByTypeId,
+  selectLinksStatus,
+} from "../../redux/slices/tenGigLinksSlice";
 
 // --- Feedback Components ---
 import { LoadingSpinner } from "../../components/ui/feedback/LoadingSpinner";
@@ -42,8 +46,8 @@ const NetworkVisualizerWrapper = ({ theme }) => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  // --- NEW: Get the status of each required slice ---
-  const pikudimStatus = useSelector(selectPikudimStatus);
+  // --- Get the status of each required slice (Updated) ---
+  const coreSitesStatus = useSelector(selectCoreSitesStatus);
   const devicesStatus = useSelector(selectDevicesStatus);
   const linksStatus = useSelector(selectLinksStatus);
 
@@ -52,20 +56,24 @@ const NetworkVisualizerWrapper = ({ theme }) => {
   const [activeLinkTabId, setActiveLinkTabId] = useState(null);
   const [showDetailedLinks, setShowDetailedLinks] = useState(false);
 
-  // Data selectors for L-Chart (typeId: 1)
-  const pikudim = useSelector((state) => selectPikudimByTypeId(state, 1));
+  // Data selectors for L-Chart (networkId: 1)
+  const coreSites = useSelector((state) =>
+    selectCoreSitesByNetworkId(state, 1)
+  );
   const allDevicesForType = useSelector((state) =>
     selectDevicesByTypeId(state, 1)
   );
   const linksRaw = useSelector((state) => selectLinksByTypeId(state, 1));
 
-  // The `useMemo` for graphData is unchanged and correct
+  // The `useMemo` for graphData is updated for the new data structure
   const graphData = useMemo(() => {
-    if (!pikudim.length || !allDevicesForType.length) {
+    if (!coreSites.length || !allDevicesForType.length) {
       return { nodes: [], links: [] };
     }
 
-    const devicesByPikudId = allDevicesForType.reduce((acc, device) => {
+    const devicesByCoreSiteId = allDevicesForType.reduce((acc, device) => {
+      // Assuming 'core_pikudim_site_id' is still the FK on the device object.
+      // If the backend changes this, it needs to be updated here.
       const siteId = device.core_pikudim_site_id;
       if (!acc[siteId]) {
         acc[siteId] = [];
@@ -74,24 +82,23 @@ const NetworkVisualizerWrapper = ({ theme }) => {
       return acc;
     }, {});
 
-    const topDevicesPerPikud = Object.values(devicesByPikudId).flatMap(
+    const topDevicesPerSite = Object.values(devicesByCoreSiteId).flatMap(
       (deviceGroup) => selectTopTwoDevices(deviceGroup)
     );
 
     const visibleDeviceHostnames = new Set(
-      topDevicesPerPikud.map((d) => d.hostname)
+      topDevicesPerSite.map((d) => d.hostname)
     );
 
-    const pikudimMap = pikudim.reduce((acc, p) => {
-      acc[p.id] = p;
+    const coreSiteMap = coreSites.reduce((acc, site) => {
+      acc[site.id] = site;
       return acc;
     }, {});
-    const transformedNodes = topDevicesPerPikud.map((device) => ({
+
+    const transformedNodes = topDevicesPerSite.map((device) => ({
       id: device.hostname,
       group: "node",
-      zone:
-        pikudimMap[device.core_pikudim_site_id]?.core_site_name ||
-        "Unknown Zone",
+      zone: coreSiteMap[device.core_pikudim_site_id]?.name || "Unknown Zone", // Use .name from core site
     }));
 
     const transformedLinks = linksRaw
@@ -108,7 +115,7 @@ const NetworkVisualizerWrapper = ({ theme }) => {
       }));
 
     return { nodes: transformedNodes, links: transformedLinks };
-  }, [pikudim, allDevicesForType, linksRaw]);
+  }, [coreSites, allDevicesForType, linksRaw]);
 
   // All handlers are unchanged...
   const handleZoneClick = useCallback(
@@ -171,27 +178,23 @@ const NetworkVisualizerWrapper = ({ theme }) => {
 
   const handleRetry = () => dispatch(fetchInitialData());
 
-  // --- NEW: Component-specific loading, error, and empty state logic ---
+  // Component-specific loading, error, and empty state logic (Updated)
   const isLoading =
-    pikudimStatus === "loading" ||
+    coreSitesStatus === "loading" ||
     devicesStatus === "loading" ||
     linksStatus === "loading";
 
   const hasError =
-    pikudimStatus === "failed" ||
+    coreSitesStatus === "failed" ||
     devicesStatus === "failed" ||
     linksStatus === "failed";
 
   const isDataEmpty = !isLoading && !hasError && graphData.nodes.length === 0;
 
-  // The AppInitializer already handles the very first load, but this
-  // will catch subsequent re-fetches triggered within this component.
   if (isLoading) {
     return <LoadingSpinner text="Building L-Chart..." />;
   }
 
-  // THIS IS THE CRITICAL FIX. If any of the required slices fail, this
-  // component will render an error message instead of crashing.
   if (hasError) {
     return (
       <ErrorMessage
@@ -201,8 +204,6 @@ const NetworkVisualizerWrapper = ({ theme }) => {
     );
   }
 
-  // If loading and error states are clear, but there's still no data,
-  // it means the API returned empty arrays for one or more critical slices.
   if (isDataEmpty) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center p-4 text-center">
@@ -216,7 +217,7 @@ const NetworkVisualizerWrapper = ({ theme }) => {
     );
   }
 
-  // --- Original component return for a successful data load ---
+  // Original component return for a successful data load
   return (
     <div className="w-full h-full flex flex-col">
       {openLinkTabs.length > 0 && (

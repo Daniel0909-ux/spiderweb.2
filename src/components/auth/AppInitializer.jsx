@@ -13,19 +13,19 @@ import { fetchAllAlerts } from "../../redux/slices/alertsSlice";
 import { Loader2, AlertTriangle } from "lucide-react";
 
 // Selectors for core data status (no changes here)
-const selectPikudimStatus = (state) => state.corePikudim.status;
+const selectCoreSitesStatus = (state) => state.coreSites.status;
 const selectDevicesStatus = (state) => state.devices.status;
 const selectLinksStatus = (state) => state.tenGigLinks.status;
 const selectSitesStatus = (state) => state.sites.status;
 
 const selectCoreDataStatus = createSelector(
   [
-    selectPikudimStatus,
+    selectCoreSitesStatus,
     selectDevicesStatus,
     selectLinksStatus,
     selectSitesStatus,
   ],
-  (pikudim, devices, links, sites) => ({ pikudim, devices, links, sites })
+  (coreSites, devices, links, sites) => ({ coreSites, devices, links, sites })
 );
 
 export function AppInitializer({ children }) {
