@@ -1,3 +1,5 @@
+// src/pages/DashboardPage.jsx
+
 import React from "react";
 import { useSelector } from "react-redux";
 import {
@@ -9,9 +11,10 @@ import {
 } from "react-router-dom";
 import { ArrowUp, ArrowDown, XCircle } from "lucide-react";
 
-// Page Components for each tab
+// Page Components
 import FavoritesPage from "./dashboard/FavoritesPage";
 import AllInterfacesPage from "./dashboard/AllInterfacesPage";
+import LinkForensicsPage from "./dashboard/LinkForensicsPage";
 
 // Chart and Site specific components
 import NetworkVisualizerWrapper from "./dashboard/NetworkVisualizerWrapper";
@@ -21,13 +24,12 @@ import SiteDetailPage from "../components/end-site/SiteDetailPage";
 import EndSiteIndexPage from "../components/end-site/EndSiteIndexPage";
 import LinkTable from "../components/CoreDevice/LinkTable";
 
-// Helper hooks and Redux selectors
+// --- UPDATED: Helper hooks and Redux selectors ---
 import { useRelatedDevices } from "../hooks/useRelatedDevices";
-import { selectAllDevices } from "../redux/slices/devicesSlice";
+// 1. Import from the new coreDevicesSlice instead of the old devicesSlice
+import { selectAllCoreDevices } from "../redux/slices/coreDevicesSlice";
 import { selectAllSites } from "../redux/slices/sitesSlice";
 import { selectAllTenGigLinks } from "../redux/slices/tenGigLinksSlice";
-
-import LinkForensicsPage from "./dashboard/LinkForensicsPage";
 
 // This helper component can be used by other pages like FavoritesPage
 function StatusIndicator({ status }) {
@@ -51,50 +53,49 @@ function StatusIndicator({ status }) {
 
 // This component now correctly receives the theme prop to pass down.
 function NodeDetailView({ chartType, theme }) {
-  const { nodeId: deviceHostname, zoneId } = useParams();
-  const allDevices = useSelector(selectAllDevices);
+  const { nodeId: deviceName, zoneId } = useParams(); // URL param is the device name
+
+  // 2. Use the new selector to get all core devices
+  const allDevices = useSelector(selectAllCoreDevices);
   const allSites = useSelector(selectAllSites);
   const allLinks = useSelector(selectAllTenGigLinks);
-  const otherDevicesInZone = useRelatedDevices(deviceHostname, zoneId);
+  const otherDevicesInZone = useRelatedDevices(deviceName, zoneId);
 
   const linksForTable = React.useMemo(() => {
-    if (
-      !deviceHostname ||
-      !chartType ||
-      !allDevices.length ||
-      !allLinks.length
-    ) {
+    if (!deviceName || !allDevices.length || !allLinks.length) {
       return [];
     }
     const typeId = chartType === "P" ? 2 : 1;
     const allCoreLinksForChart = allLinks.filter(
       (link) => link.network_type_id === typeId
     );
-    const currentDevice = allDevices.find((d) => d.hostname === deviceHostname);
+
+    // 3. Update logic to use `d.name` which comes from the new API, instead of `d.hostname`
+    const currentDevice = allDevices.find((d) => d.name === deviceName);
     if (!currentDevice) return [];
 
-    const deviceMapByHostname = new Map(allDevices.map((d) => [d.hostname, d]));
+    const deviceMapByName = new Map(allDevices.map((d) => [d.name, d]));
 
     const interCoreLinks = allCoreLinksForChart
       .filter(
-        (link) =>
-          link.source === deviceHostname || link.target === deviceHostname
+        (link) => link.source === deviceName || link.target === deviceName
       )
       .map((link) => {
-        const otherDeviceHostname =
-          link.source === deviceHostname ? link.target : link.source;
-        const otherDevice = deviceMapByHostname.get(otherDeviceHostname);
+        const otherDeviceName =
+          link.source === deviceName ? link.target : link.source;
+        const otherDevice = deviceMapByName.get(otherDeviceName);
         let linkType = "inter-core-different-site";
+
+        // 4. Update logic to use `core_site_id` which is added by our new slice
         if (
           otherDevice &&
-          otherDevice.core_pikudim_site_id ===
-            currentDevice.core_pikudim_site_id
+          otherDevice.core_site_id === currentDevice.core_site_id
         ) {
           linkType = "inter-core-same-site";
         }
         return {
           id: link.id,
-          name: `Link to ${otherDeviceHostname}`,
+          name: `Link to ${otherDeviceName}`,
           description: `Inter-Core Link (${
             linkType.includes("same") ? "Same Site" : "Different Site"
           })`,
@@ -124,13 +125,12 @@ function NodeDetailView({ chartType, theme }) {
       }));
 
     return [...interCoreLinks, ...coreToSiteLinks];
-  }, [deviceHostname, chartType, allDevices, allSites, allLinks]);
+  }, [deviceName, chartType, allDevices, allSites, allLinks]);
 
   return (
-    // The simple wrapper is correct. LinkTable will handle its own height.
     <div className="p-1">
       <LinkTable
-        coreDeviceName={deviceHostname}
+        coreDeviceName={deviceName}
         coreSiteName={zoneId}
         linksData={linksForTable}
         otherDevicesInZone={otherDevicesInZone}
@@ -156,12 +156,11 @@ export function DashboardPage({
         element={<LinkForensicsPage theme={theme} />}
       />
 
-      {/* THE FIX: The chart routes are restructured to separate layouts for each sub-route. */}
+      {/* The routing structure itself does not need to change */}
       <Route
         path="/l-chart/*"
         element={
           <Routes>
-            {/* The index route gets the non-scrolling, fixed-height layout */}
             <Route
               index
               element={
@@ -177,7 +176,6 @@ export function DashboardPage({
                 </div>
               }
             />
-            {/* The node route is rendered directly, allowing it to use the main scrollbar */}
             <Route
               path="zone/:zoneId/node/:nodeId"
               element={<NodeDetailView chartType="L" theme={theme} />}
@@ -200,7 +198,6 @@ export function DashboardPage({
         path="/p-chart/*"
         element={
           <Routes>
-            {/* The index route gets its own non-scrolling, fixed-height layout */}
             <Route
               index
               element={
@@ -216,7 +213,6 @@ export function DashboardPage({
                 </div>
               }
             />
-            {/* The node route is rendered directly, allowing it to use the main scrollbar */}
             <Route
               path="zone/:zoneId/node/:nodeId"
               element={<NodeDetailView chartType="P" theme={theme} />}
@@ -248,7 +244,7 @@ export function DashboardPage({
         }
       />
 
-      {/* Default routes to redirect to the favorites tab */}
+      {/* Default routes (unchanged) */}
       <Route path="/" element={<Navigate to="/favorites" replace />} />
       <Route path="*" element={<Navigate to="/favorites" replace />} />
     </Routes>

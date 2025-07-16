@@ -6,7 +6,7 @@ import {
   createEntityAdapter,
   createSelector,
 } from "@reduxjs/toolkit";
-import { api } from "../../services/api";
+import { api } from "../../services/apiServices";
 import { logout } from "./authSlice";
 
 // --- ENTITY ADAPTER for efficient state management of all core devices ---

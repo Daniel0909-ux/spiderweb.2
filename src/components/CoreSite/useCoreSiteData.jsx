@@ -1,3 +1,5 @@
+// src/hooks/useCoreSiteData.js
+
 import {
   useState,
   useEffect,
@@ -9,29 +11,39 @@ import {
 import { useSelector } from "react-redux";
 import { useParams, useNavigate } from "react-router-dom";
 import { useNodeLayout } from "./useNodeLayout";
+
+// --- 1. UPDATED: Import new selectors ---
 import { selectAllSites } from "../../redux/slices/sitesSlice";
 import { selectLinksByTypeId } from "../../redux/slices/tenGigLinksSlice";
-import { selectAllDevices } from "../../redux/slices/devicesSlice";
-import { selectAllPikudim } from "../../redux/slices/corePikudimSlice";
+import { selectAllCoreDevices } from "../../redux/slices/coreDevicesSlice";
+import { selectAllCoreSites } from "../../redux/slices/coreSitesSlice";
 
 export function useCoreSiteData(chartType) {
   const { zoneId, nodeId: nodeIdFromUrl } = useParams();
   const navigate = useNavigate();
   const containerRef = useRef(null);
 
-  const allPikudim = useSelector(selectAllPikudim);
-  const allDevices = useSelector(selectAllDevices);
+  // --- 2. UPDATED: Use new selectors ---
+  const allCoreSites = useSelector(selectAllCoreSites);
+  const allDevices = useSelector(selectAllCoreDevices);
   const allSites = useSelector(selectAllSites);
   const allLinksForChart = useSelector((state) =>
     selectLinksByTypeId(state, chartType === "P" ? 2 : 1)
   );
 
+  // --- 3. UPDATED: Memoized logic for getting devices in the current zone ---
   const devicesForZone = useMemo(() => {
-    if (!zoneId || !allPikudim.length || !allDevices.length) return [];
-    const currentPikud = allPikudim.find((p) => p.core_site_name === zoneId);
-    if (!currentPikud) return [];
-    return allDevices.filter((d) => d.core_pikudim_site_id === currentPikud.id);
-  }, [zoneId, allDevices, allPikudim]);
+    if (!zoneId || !allCoreSites.length || !allDevices.length) return [];
+
+    // Find the current core site by its name (which is the zoneId from the URL)
+    const currentCoreSite = allCoreSites.find((site) => site.name === zoneId);
+    if (!currentCoreSite) return [];
+
+    // Filter all devices to find those belonging to this core site's ID
+    return allDevices.filter(
+      (device) => device.core_site_id === currentCoreSite.id
+    );
+  }, [zoneId, allDevices, allCoreSites]);
 
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [selectedNodeId, setSelectedNodeId] = useState(null);
@@ -42,26 +54,22 @@ export function useCoreSiteData(chartType) {
   const [activeDetailTabId, setActiveDetailTabId] = useState(null);
 
   const sitesForFocusedNode = useMemo(() => {
-    // This logic will only re-run if allDevices, selectedNodeId, or allSites changes.
     if (!selectedNodeId || !allDevices.length || !allSites.length) {
       return [];
     }
+    // 4. UPDATED: Find the device by `name` instead of `hostname`
+    const focusedDevice = allDevices.find((d) => d.name === selectedNodeId);
 
-    // 1. Find the full device object for the selectedNodeId (which is a hostname)
-    const focusedDevice = allDevices.find((d) => d.hostname === selectedNodeId);
-
-    // 2. If we found the device, use its real ID to filter the sites
     if (focusedDevice) {
       return allSites.filter((site) => site.device_id === focusedDevice.id);
     }
-
-    // 3. Otherwise, return an empty array
     return [];
   }, [allDevices, selectedNodeId, allSites]);
 
   useEffect(() => {
     if (devicesForZone.length > 0 && !selectedNodeId) {
-      const initialNodeId = nodeIdFromUrl || devicesForZone[0].hostname;
+      // 5. UPDATED: Use `name` instead of `hostname` for the initial node ID
+      const initialNodeId = nodeIdFromUrl || devicesForZone[0].name;
       setSelectedNodeId(initialNodeId);
       setPreviousSelectedNodeId(initialNodeId);
     }
@@ -78,7 +86,6 @@ export function useCoreSiteData(chartType) {
   }, [showExtendedNodes]);
 
   useLayoutEffect(() => {
-    // This effect can be simplified or removed if not strictly needed
     setShowExtendedNodes(false);
   }, [zoneId]);
 
@@ -106,7 +113,7 @@ export function useCoreSiteData(chartType) {
     dimensions.height,
     showExtendedNodes,
     animateExtendedLayoutUp,
-    devicesForZone,
+    devicesForZone, // This already has the correct devices
     allLinksForChart
   );
 
@@ -119,17 +126,12 @@ export function useCoreSiteData(chartType) {
     setShowExtendedNodes((prevShowExtended) => {
       const nextShowExtended = !prevShowExtended;
       if (nextShowExtended) {
-        // Switching to extended view
         setPreviousSelectedNodeId(selectedNodeId);
-        // Select the first visible node in the new layout (device at index 2)
-        const newSelected = devicesForZone[2]?.hostname;
+        // 6. UPDATED: Use `name` instead of `hostname`
+        const newSelected = devicesForZone[2]?.name;
         if (newSelected) setSelectedNodeId(newSelected);
       } else {
-        // Switching back to initial view
-        // Restore previous selection or default to first device
-        setSelectedNodeId(
-          previousSelectedNodeId || devicesForZone[0]?.hostname
-        );
+        setSelectedNodeId(previousSelectedNodeId || devicesForZone[0]?.name);
       }
       return nextShowExtended;
     });
@@ -140,22 +142,15 @@ export function useCoreSiteData(chartType) {
       console.warn("Node data incomplete for action:", clickedNodeData);
       return;
     }
-
-    // --- THIS IS THE CORE LOGIC ---
     if (clickedNodeData.id === selectedNodeId) {
-      // The user clicked on the node that is ALREADY focused.
-      // This is our trigger to navigate.
-      console.log(
-        `Navigating to details for already-focused node: ${clickedNodeData.id}`
-      );
       navigate(`node/${clickedNodeData.id}`);
     } else {
-      // The user clicked on a DIFFERENT node.
-      // The action is to change the focus.
-      console.log(`Setting focus to ${clickedNodeData.id}`);
       setSelectedNodeId(clickedNodeData.id);
     }
   };
+
+  // (The rest of the hook's functions are unchanged as they don't depend on the old data structure)
+  // ... addOrActivateTab, handleCloseTab, handleNavigateToSite, handleSiteClick, handleLinkClick ...
 
   const addOrActivateTab = useCallback((payload) => {
     const { id, type } = payload;
@@ -194,39 +189,24 @@ export function useCoreSiteData(chartType) {
     [activeDetailTabId]
   );
 
-  // REPLACE THE OLD FUNCTION WITH THIS NEW ONE:
-
   const handleNavigateToSite = useCallback(
     (clickedSiteData) => {
-      // `clickedSiteData` is the single site object from the tab.
-      // It contains the `name` property (e.g., "Site West Pasquale").
       if (!clickedSiteData || !clickedSiteData.name) {
         console.error("Navigation failed: No site data provided.");
         return;
       }
 
-      // 1. Get the English name of the site. This is our unique key to find the group.
       const targetSiteName = clickedSiteData.name;
-
-      // 2. Search through the `allSites` array (which you already have in this hook)
-      //    to find every connection that matches this name. This rebuilds the "group".
       const siteGroup = allSites.filter(
         (site) => site.site_name_english === targetSiteName
       );
 
-      // 3. If we found at least one matching site, we can navigate.
       if (siteGroup.length > 0) {
-        // Create a URL-friendly version of the name.
         const navId = encodeURIComponent(targetSiteName);
-
-        // 4. THIS IS THE CRITICAL FIX:
-        //    Navigate with the data in the CORRECT format. The router expects an
-        //    object with a `siteGroupData` key, and its value is the array we just built.
         navigate(`/sites/site/${navId}`, {
           state: { siteGroupData: siteGroup },
         });
       } else {
-        // Optional: Handle the case where for some reason the site couldn't be found.
         console.error(
           "Could not find a matching site group for:",
           targetSiteName
@@ -234,17 +214,15 @@ export function useCoreSiteData(chartType) {
       }
     },
     [navigate, allSites]
-  ); // <-- Add `allSites` to the dependency array
+  );
 
   const handleSiteClick = (siteData) => {
-    // Modified to accept the whole site object
     const siteDetailPayload = {
-      id: siteData.id, // Use the real ID
+      id: siteData.id,
       navId: `site-${siteData.id}`,
-      name: siteData.site_name_english, // Use the real name
+      name: siteData.site_name_english,
       type: "site",
       zone: zoneId,
-      // You can add more real data from the site object here if needed
       description: `Details for ${siteData.site_name_english}`,
     };
     addOrActivateTab(siteDetailPayload);

@@ -5,23 +5,27 @@ import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
-// --- Data & Slices ---
-import { selectAllSites } from "../../redux/slices/sitesSlice";
-import { selectAllDevices } from "../../redux/slices/devicesSlice";
-import { selectAllPikudim } from "../../redux/slices/corePikudimSlice";
+// --- 1. UPDATED: Data & Slices ---
+import {
+  selectAllSites,
+  selectSitesStatus,
+} from "../../redux/slices/sitesSlice";
+import {
+  selectAllCoreDevices,
+  selectCoreDevicesStatus,
+} from "../../redux/slices/coreDevicesSlice";
+import {
+  selectAllCoreSites,
+  selectCoreSitesStatus,
+} from "../../redux/slices/coreSitesSlice";
 import { fetchInitialData } from "../../redux/slices/authSlice";
 
 // --- UI & Feedback Components ---
 import { GridSkeleton } from "../ui/feedback/GridSkeleton";
 import { ErrorMessage } from "../ui/feedback/ErrorMessage";
 
-// --- NEW: Status Selectors ---
-const selectSitesStatus = (state) => state.sites.status;
-const selectDevicesStatus = (state) => state.devices.status;
-const selectPikudimStatus = (state) => state.corePikudim.status;
-
-// SiteCard component remains unchanged
-const SiteCard = ({ siteGroup, deviceMap, pikudMap, onClick }) => {
+// The SiteCard component needs to be updated to use the new data structures
+const SiteCard = ({ siteGroup, deviceMap, coreSiteMap, onClick }) => {
   const primarySite = siteGroup[0];
   return (
     <div
@@ -42,16 +46,15 @@ const SiteCard = ({ siteGroup, deviceMap, pikudMap, onClick }) => {
       <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-600 dark:text-gray-300 space-y-3">
         {siteGroup.map((site) => {
           const device = deviceMap.get(site.device_id);
-          const pikud = device
-            ? pikudMap.get(device.core_pikudim_site_id)
-            : null;
+          // 2. UPDATED: Look up the core site using the device's foreign key
+          const coreSite = device ? coreSiteMap.get(device.core_site_id) : null;
           return (
             <div key={site.id}>
               <p>
-                <strong>Device:</strong> {device?.hostname || "N/A"}
+                <strong>Device:</strong> {device?.name || "N/A"}
               </p>
               <p>
-                <strong>Core Site:</strong> {pikud?.core_site_name || "N/A"}
+                <strong>Core Site:</strong> {coreSite?.name || "N/A"}
               </p>
             </div>
           );
@@ -67,22 +70,24 @@ export default function EndSiteIndexPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const parentRef = useRef(null);
 
-  // --- Get Data and Status from Redux ---
+  // --- 3. UPDATED: Get Data and Status from Redux ---
   const allSites = useSelector(selectAllSites);
-  const allDevices = useSelector(selectAllDevices);
-  const allPikudim = useSelector(selectAllPikudim);
-  const sitesStatus = useSelector(selectSitesStatus);
-  const devicesStatus = useSelector(selectDevicesStatus);
-  const pikudimStatus = useSelector(selectPikudimStatus);
+  const allDevices = useSelector(selectAllCoreDevices);
+  const allCoreSites = useSelector(selectAllCoreSites);
 
-  // --- Memoized data processing (no changes) ---
+  const sitesStatus = useSelector(selectSitesStatus);
+  const devicesStatus = useSelector(selectCoreDevicesStatus);
+  const coreSitesStatus = useSelector(selectCoreSitesStatus);
+
+  // --- 4. UPDATED: Memoized data processing ---
   const deviceMap = useMemo(
     () => new Map(allDevices.map((d) => [d.id, d])),
     [allDevices]
   );
-  const pikudMap = useMemo(
-    () => new Map(allPikudim.map((p) => [p.id, p])),
-    [allPikudim]
+  // Create a map for core sites instead of pikudim
+  const coreSiteMap = useMemo(
+    () => new Map(allCoreSites.map((p) => [p.id, p])),
+    [allCoreSites]
   );
   const groupedSites = useMemo(() => {
     return allSites.reduce((acc, site) => {
@@ -140,16 +145,17 @@ export default function EndSiteIndexPage() {
     measureElement: (element) => element.getBoundingClientRect().height,
   });
 
-  // --- NEW: Resilient Rendering Logic ---
+  // --- Resilient Rendering Logic ---
   const renderContent = () => {
+    // 5. UPDATED: Check status of new slices
     const isLoading =
       sitesStatus === "loading" ||
       devicesStatus === "loading" ||
-      pikudimStatus === "loading";
+      coreSitesStatus === "loading";
     const hasError =
       sitesStatus === "failed" ||
       devicesStatus === "failed" ||
-      pikudimStatus === "failed";
+      coreSitesStatus === "failed";
 
     if (isLoading) {
       return <GridSkeleton count={15} />;
@@ -195,7 +201,8 @@ export default function EndSiteIndexPage() {
                   key={siteGroup[0].site_name_english}
                   siteGroup={siteGroup}
                   deviceMap={deviceMap}
-                  pikudMap={pikudMap}
+                  // 6. UPDATED: Pass the new coreSiteMap
+                  coreSiteMap={coreSiteMap}
                   onClick={() => handleSiteClick(siteGroup)}
                 />
               );

@@ -5,17 +5,17 @@ import {
   addCoreDevice,
   deleteCoreDevice,
   selectAllDevices,
-} from "../redux/slices/devicesSlice";
+} from "../redux/slices/coreDevicesSlice";
 import {
   addCoreSite,
   deleteCoreSite,
   selectAllPikudim,
-} from "../redux/slices/corePikudimSlice";
+} from "../redux/slices/coreSitesSlice";
 import {
   addNetType,
   deleteNetType,
   selectAllNetTypes,
-} from "../redux/slices/netTypesSlice";
+} from "../redux/slices/networksSlice";
 import { MdSettings, MdDelete } from "react-icons/md";
 
 // Reusable Input Field Component (Unchanged)

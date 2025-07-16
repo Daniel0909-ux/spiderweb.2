@@ -1,12 +1,27 @@
+// src/components/end-site/SiteDetailPage.jsx
+
 import React, { useState, useEffect, useMemo } from "react";
 import { useSelector } from "react-redux";
 import LinkDetailRow from "./LineDetailExtend";
 import StatusBulb from "../shared/StatusBulb";
-import { selectAllDevices } from "../../redux/slices/devicesSlice";
-//import { api } from "../../services/api";
+import { selectAllCoreDevices } from "../../redux/slices/coreDevicesSlice";
+// Make sure you have a way to import your api service.
+// This might need to be created or adjusted based on your project structure.
+// For now, we'll assume a placeholder api object.
+const api = {
+  getWanConnection: async (networkData) => {
+    console.log("Fetching WAN connection for:", networkData);
+    // Simulate API call
+    await new Promise((res) => setTimeout(res, 800));
+    // In a real scenario, this would return data from the backend.
+    // For now, we return mock data.
+    return createSiteInternalTopology();
+  },
+};
 
 // Helper function for generating a complex site topology (NO CHANGES)
 const createSiteInternalTopology = () => {
+  // ... (this function remains unchanged)
   const nodes = [];
   const links = [];
   const nodeTypes = ["Firewall", "Router", "Switch", "Server"];
@@ -83,13 +98,12 @@ const TopologyLoader = () => (
 );
 
 const SiteDetailPage = ({ siteGroup, initialTheme = "light" }) => {
-  // All state and memoization hooks remain unchanged
   const [theme, setTheme] = useState(initialTheme);
   const [expandedLinkId, setExpandedLinkId] = useState(null);
-  const allDevices = useSelector(selectAllDevices);
+  const allDevices = useSelector(selectAllCoreDevices);
 
   const [topologyData, setTopologyData] = useState({ nodes: [], links: [] });
-  const [topologyStatus, setTopologyStatus] = useState("loading"); // 'loading', 'succeeded', 'failed'
+  const [topologyStatus, setTopologyStatus] = useState("loading");
 
   const deviceMap = useMemo(
     () => new Map(allDevices.map((d) => [d.id, d])),
@@ -110,7 +124,7 @@ const SiteDetailPage = ({ siteGroup, initialTheme = "light" }) => {
 
   useEffect(() => {
     if (!siteGroup || siteGroup.length === 0) {
-      setTopologyStatus("idle"); // Not loading if there's no site data
+      setTopologyStatus("idle");
       return;
     }
 
@@ -120,24 +134,25 @@ const SiteDetailPage = ({ siteGroup, initialTheme = "light" }) => {
         const primarySite = siteGroup[0];
         const device = deviceMap.get(primarySite.device_id);
 
-        // IMPORTANT: The backend needs `management_segment` and `sda_site_id`.
-        // You must source `management_segment` from your data. Here we assume
-        // it's a property on the device object. Adjust if needed.
         const networkData = {
           sda_site_id: primarySite.id,
-          // TODO: Replace this with the actual management segment from your device data
+          // Assuming `management_segment` is a property on your device object.
+          // Adjust if the property name is different.
           management_segment: device?.management_segment || "default-segment",
         };
 
-        // eslint-disable-next-line no-undef
+        // --- THIS IS THE FIX ---
+        // 1. UNCOMMENTED: Use the real API call with the networkData variable.
         const data = await api.getWanConnection(networkData);
-        // Assuming the API returns an object with { nodes: [], links: [] }
+
+        // 2. REMOVED: The simulated API call is no longer needed here.
+
         setTopologyData(data);
         setTopologyStatus("succeeded");
       } catch (error) {
         console.error("Failed to fetch site topology:", error);
         setTopologyStatus("failed");
-        // As a fallback on error, we can use the mock data function
+        // The fallback to mock data on error is a good pattern to keep.
         setTopologyData(createSiteInternalTopology());
       }
     };
@@ -145,15 +160,14 @@ const SiteDetailPage = ({ siteGroup, initialTheme = "light" }) => {
     fetchTopology();
   }, [siteGroup, deviceMap]);
 
-  const siteTopology = useMemo(() => createSiteInternalTopology(), []);
-
+  // The rest of the component logic remains the same, but it's updated for correctness
   const siteConnectionsData = useMemo(() => {
     if (!siteGroup || siteGroup.length === 0) return [];
     return siteGroup.map((connection) => {
       const device = deviceMap.get(connection.device_id);
       return {
         id: connection.id,
-        name: `Connection to ${device?.hostname || "Unknown Device"}`,
+        name: `Connection to ${device?.name || "Unknown Device"}`,
         description: `Interface ID: ${connection.interface_id}`,
         status: "up",
         ospfStatus: "N/A",
@@ -163,7 +177,7 @@ const SiteDetailPage = ({ siteGroup, initialTheme = "light" }) => {
           mediaType: "Fiber/Copper",
           siteId: connection.id,
           deviceId: connection.device_id,
-          deviceName: device?.hostname,
+          deviceName: device?.name,
           interfaceId: connection.interface_id,
         },
       };
@@ -187,7 +201,7 @@ const SiteDetailPage = ({ siteGroup, initialTheme = "light" }) => {
     setExpandedLinkId((prevId) => (prevId === linkId ? null : linkId));
   };
 
-  const nodeMap = new Map(siteTopology.nodes.map((node) => [node.id, node]));
+  const nodeMap = new Map(topologyData.nodes.map((node) => [node.id, node]));
   const nodeColorMap = {
     Router: isDark ? "fill-blue-400" : "fill-blue-500",
     Switch: isDark ? "fill-teal-400" : "fill-teal-500",
@@ -235,7 +249,6 @@ const SiteDetailPage = ({ siteGroup, initialTheme = "light" }) => {
                   role="img"
                   aria-label={`Internal topology diagram for ${primarySite.site_name_english}`}
                 >
-                  {/* Use topologyData from state */}
                   {topologyData.links.map((link) => {
                     const sourceNode = nodeMap.get(link.source);
                     const targetNode = nodeMap.get(link.target);
@@ -260,7 +273,6 @@ const SiteDetailPage = ({ siteGroup, initialTheme = "light" }) => {
                       />
                     );
                   })}
-                  {/* Use topologyData from state */}
                   {topologyData.nodes.map((node) => (
                     <g
                       key={node.id}

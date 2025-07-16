@@ -2,8 +2,7 @@
 
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import Cookies from "js-cookie";
-import { api } from "../../services/api";
-
+import { api } from "../../services/apiServices";
 // --- CHANGE 1: Import the new `fetchNetworks` thunk ---
 import { fetchNetworks } from "./networksSlice";
 import { fetchAllCoreSites } from "./coreSitesSlice";
