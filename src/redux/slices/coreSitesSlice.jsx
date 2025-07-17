@@ -15,7 +15,7 @@ const coreSitesAdapter = createEntityAdapter({
 });
 
 const initialState = coreSitesAdapter.getInitialState({
-  // We'll track which site IDs belong to each network
+  // We'll track which site IDs belong to each network for filtering
   sitesByNetworkId: {}, // { [networkId]: string[] }
   status: "idle", // 'idle' | 'loading' | 'succeeded' | 'failed'
   error: null,
@@ -24,8 +24,8 @@ const initialState = coreSitesAdapter.getInitialState({
 // --- ASYNC THUNKS ---
 
 /**
- * Fetches all core sites for a SINGLE given network ID.
- * This is the new, dependent thunk.
+ * CHILD THUNK: Fetches all core sites for a SINGLE given network ID.
+ * This is dispatched by the master thunk and can also be used for targeted updates.
  */
 export const fetchCoreSitesForNetwork = createAsyncThunk(
   "coreSites/fetchForNetwork",
@@ -41,8 +41,9 @@ export const fetchCoreSitesForNetwork = createAsyncThunk(
 );
 
 /**
- * A "master" thunk to fetch core sites for ALL provided network IDs.
- * This will be called by our main data orchestrator.
+ * MASTER THUNK: Fetches core sites for ALL provided network IDs.
+ * This is the main thunk called by the app initializer. It collects all data
+ * and returns it in a single payload for the main reducer to handle.
  */
 export const fetchAllCoreSites = createAsyncThunk(
   "coreSites/fetchAll",
@@ -52,24 +53,33 @@ export const fetchAllCoreSites = createAsyncThunk(
       const fetchPromises = networkIds.map((id) =>
         dispatch(fetchCoreSitesForNetwork(id))
       );
-      // Wait for all of them to settle (either fulfilled or rejected)
-      await Promise.all(fetchPromises);
+      // Wait for all of them to settle and get their results
+      const results = await Promise.all(fetchPromises);
+
+      // Filter out any rejected promises and extract the 'sites' payload from the fulfilled ones.
+      // `flatMap` is used to combine the arrays of sites into a single flat array.
+      const allSites = results
+        .filter((result) => fetchCoreSitesForNetwork.fulfilled.match(result))
+        .flatMap((result) => result.payload.sites);
+
+      // Return one single, combined array of all sites.
+      // This payload will be handled by the `fetchAllCoreSites.fulfilled` reducer.
+      return allSites;
     } catch (error) {
-      // This catch block might not be strictly necessary if the individual
-      // thunks handle their own errors, but it's good for safety.
+      // This catch is for safety but individual thunks handle their own rejections.
       return rejectWithValue(error.message);
     }
   }
 );
 
-// --- NEW: Add Core Site Thunk ---
+// --- CRUD Thunks (example of using the child thunk for targeted reloads) ---
 export const addCoreSite = createAsyncThunk(
   "coreSites/addCoreSite",
   async (siteData, { dispatch, rejectWithValue }) => {
-    // siteData must include the parent networkId, e.g., { name: 'Site A', network_id: 1 }
+    // siteData must include parent network_id, e.g., { name: 'Site A', network_id: 1 }
     try {
       await api.addCoreSite(siteData);
-      // Re-fetch only the sites for the affected network
+      // Re-fetch only the sites for the affected network for an efficient update.
       dispatch(fetchCoreSitesForNetwork(siteData.network_id));
     } catch (error) {
       return rejectWithValue(error.message);
@@ -77,7 +87,6 @@ export const addCoreSite = createAsyncThunk(
   }
 );
 
-// --- NEW: Delete Core Site Thunk ---
 export const deleteCoreSite = createAsyncThunk(
   "coreSites/deleteCoreSite",
   async (payload, { dispatch, rejectWithValue }) => {
@@ -85,7 +94,7 @@ export const deleteCoreSite = createAsyncThunk(
     const { siteId, networkId } = payload;
     try {
       await api.deleteCoreSite(siteId);
-      // Re-fetch the list for the parent network
+      // Re-fetch the list for the parent network.
       dispatch(fetchCoreSitesForNetwork(networkId));
     } catch (error) {
       return rejectWithValue(error.message);
@@ -99,23 +108,39 @@ const coreSitesSlice = createSlice({
   initialState,
   reducers: {},
   extraReducers: (builder) => {
-    // --- THIS IS THE FIX: Each .addCase is a separate statement ---
+    // --- Master Thunk Reducers ---
     builder.addCase(fetchAllCoreSites.pending, (state) => {
       state.status = "loading";
       state.error = null;
     });
-    builder.addCase(fetchAllCoreSites.fulfilled, (state) => {
+    builder.addCase(fetchAllCoreSites.fulfilled, (state, action) => {
+      // `action.payload` is the flat array of all sites returned by the thunk.
+      // `setAll` correctly populates BOTH `state.ids` and `state.entities`.
+      // This is the key fix that allows the data-fetching chain to proceed.
+      if (action.payload) {
+        coreSitesAdapter.setAll(state, action.payload);
+      }
       state.status = "succeeded";
     });
     builder.addCase(fetchAllCoreSites.rejected, (state, action) => {
       state.status = "failed";
       state.error = action.payload;
     });
+
+    // --- Child Thunk Reducer ---
+    // This reducer is still useful. It runs for each network and populates
+    // the `sitesByNetworkId` map, which is used by the `selectCoreSitesByNetworkId` selector.
+    // It also ensures the state is up-to-date if you use `fetchCoreSitesForNetwork` directly.
     builder.addCase(fetchCoreSitesForNetwork.fulfilled, (state, action) => {
       const { networkId, sites } = action.payload;
+      // We still upsert here to ensure the latest data is present.
+      // This won't conflict with `setAll` because the data is the same.
       coreSitesAdapter.upsertMany(state, sites);
+      // This populates our lookup map for the selector.
       state.sitesByNetworkId[networkId] = sites.map((site) => site.id);
     });
+
+    // --- Logout Reducer ---
     builder.addCase(logout.type, () => {
       return initialState;
     });
@@ -129,18 +154,17 @@ export const { selectAll: selectAllCoreSites, selectById: selectCoreSiteById } =
 export const selectCoreSitesStatus = (state) => state.coreSites.status;
 export const selectCoreSitesError = (state) => state.coreSites.error;
 
-// New memoized selector to get all core sites for a specific network ID
+// This memoized selector to get all core sites for a specific network ID remains unchanged.
+// It correctly uses the `sitesByNetworkId` map populated by the child thunk's reducer.
 export const selectCoreSitesByNetworkId = createSelector(
-  // Input selectors
   [
     (state) => state.coreSites.entities,
     (state) => state.coreSites.sitesByNetworkId,
     (state, networkId) => networkId,
   ],
-  // Output selector
   (entities, sitesByNetworkId, networkId) => {
     const siteIds = sitesByNetworkId[networkId] || [];
-    return siteIds.map((id) => entities[id]).filter(Boolean); // filter(Boolean) removes any undefined if an ID is invalid
+    return siteIds.map((id) => entities[id]).filter(Boolean);
   }
 );
 

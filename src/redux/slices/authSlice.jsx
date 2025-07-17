@@ -14,34 +14,60 @@ import { fetchAllLinks } from "./linksSlice";
 export const fetchInitialData = createAsyncThunk(
   "auth/fetchInitialData",
   async (_, { dispatch, getState }) => {
-    // Step A: Fetch networks
+    // --- Step A: Fetch networks ---
+    // The `unwrapResult` function is a good practice to handle potential errors.
     const networksAction = await dispatch(fetchNetworks());
-    if (fetchNetworks.rejected.match(networksAction)) return;
+    // If networks failed, stop the whole chain.
+    if (fetchNetworks.rejected.match(networksAction)) {
+      console.error("Failed to fetch networks, stopping initial data load.");
+      return;
+    }
+    const networkIds = getState().networks.ids; // getState() is safe here as it was the first await.
 
-    // Step B: Fetch core sites
-    const networkIds = getState().networks.ids;
-    if (networkIds.length > 0) {
-      await dispatch(fetchAllCoreSites(networkIds));
-    } else {
+    // --- Step B: Fetch core sites ---
+    if (networkIds.length === 0) {
+      console.log("No networks found, stopping.");
       return;
     }
 
-    // Step C: Fetch core devices
-    const coreSiteIds = getState().coreSites.ids;
-    if (coreSiteIds.length > 0) {
-      await dispatch(fetchAllCoreDevices(coreSiteIds));
-    } else {
+    // IMPORTANT CHANGE: Capture the result of the dispatch
+    const coreSitesAction = await dispatch(fetchAllCoreSites(networkIds));
+
+    // Check if it was successful and get the payload directly from the action
+    if (fetchAllCoreSites.rejected.match(coreSitesAction)) {
+      console.error("Failed to fetch core sites, stopping initial data load.");
+      return;
+    }
+    // THE FIX: Use the payload from the resolved action, NOT getState().
+    const allCoreSites = coreSitesAction.payload; // This is the array of all sites.
+    const coreSiteIds = allCoreSites.map((site) => site.id);
+
+    // --- Step C: Fetch core devices ---
+    if (coreSiteIds.length === 0) {
+      console.log("No core sites found, stopping device fetch.");
       return;
     }
 
-    // Step D: Fetch all links for the core devices
-    const coreDeviceIds = getState().coreDevices.ids;
+    // IMPORTANT CHANGE (Same pattern): Capture the result
+    const coreDevicesAction = await dispatch(fetchAllCoreDevices(coreSiteIds));
+
+    if (fetchAllCoreDevices.rejected.match(coreDevicesAction)) {
+      console.error(
+        "Failed to fetch core devices, stopping initial data load."
+      );
+      return;
+    }
+    // THE FIX: Use the payload from the resolved action.
+    const allCoreDevices = coreDevicesAction.payload; // This is the array of all devices.
+    const coreDeviceIds = allCoreDevices.map((device) => device.id);
+
+    // --- Step D: Fetch all links for the core devices ---
     if (coreDeviceIds.length > 0) {
       await dispatch(fetchAllLinks(coreDeviceIds));
     }
 
-    // Step E: Fetch any other independent data
-    dispatch(fetchSites());
+    // --- Step E: Fetch any other independent data ---
+    dispatch(fetchSites()); // Assuming this is for end-sites
   }
 );
 

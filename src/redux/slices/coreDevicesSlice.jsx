@@ -22,7 +22,7 @@ const initialState = coreDevicesAdapter.getInitialState({
 // --- ASYNC THUNKS ---
 
 /**
- * Fetches all core devices for a SINGLE given core site ID.
+ * CHILD THUNK: Fetches all core devices for a SINGLE given core site ID.
  */
 export const fetchCoreDevicesForSite = createAsyncThunk(
   "coreDevices/fetchForSite",
@@ -45,33 +45,42 @@ export const fetchCoreDevicesForSite = createAsyncThunk(
 );
 
 /**
- * A "master" thunk to fetch core devices for ALL provided core site IDs.
+ * MASTER THUNK: Fetches core devices for ALL provided core site IDs.
+ * This is the main thunk called by the app initializer. It collects all data
+ * and returns it in a single payload.
  */
 export const fetchAllCoreDevices = createAsyncThunk(
   "coreDevices/fetchAll",
   async (coreSiteIds, { dispatch, rejectWithValue }) => {
     if (!Array.isArray(coreSiteIds) || coreSiteIds.length === 0) {
-      return; // Nothing to fetch
+      return []; // Nothing to fetch, return empty array to prevent errors
     }
     try {
       const fetchPromises = coreSiteIds.map((id) =>
         dispatch(fetchCoreDevicesForSite(id))
       );
-      await Promise.all(fetchPromises);
+      const results = await Promise.all(fetchPromises);
+
+      // Filter out rejected promises and flatten the arrays of devices into one.
+      const allDevices = results
+        .filter((result) => fetchCoreDevicesForSite.fulfilled.match(result))
+        .flatMap((result) => result.payload); // The payload is already an array of devices
+
+      // Return one single, combined array of all devices.
+      return allDevices;
     } catch (error) {
       return rejectWithValue(error.message);
     }
   }
 );
 
-// --- NEW: Add Core Device Thunk ---
+// --- CRUD Thunks (for targeted reloads) ---
 export const addCoreDevice = createAsyncThunk(
   "coreDevices/addCoreDevice",
   async (deviceData, { dispatch, rejectWithValue }) => {
-    // deviceData must include parent core_site_id, e.g., { name: 'Router A', core_site_id: 456 }
+    // deviceData must include parent core_site_id
     try {
       await api.addCoreDevice(deviceData);
-      // Re-fetch only the devices for the affected core site
       dispatch(fetchCoreDevicesForSite(deviceData.core_site_id));
     } catch (error) {
       return rejectWithValue(error.message);
@@ -79,15 +88,13 @@ export const addCoreDevice = createAsyncThunk(
   }
 );
 
-// --- NEW: Delete Core Device Thunk ---
 export const deleteCoreDevice = createAsyncThunk(
   "coreDevices/deleteCoreDevice",
   async (payload, { dispatch, rejectWithValue }) => {
-    // Payload must be an object: { deviceId: 789, coreSiteId: 456 }
+    // Payload: { deviceId, coreSiteId }
     const { deviceId, coreSiteId } = payload;
     try {
       await api.deleteCoreDevice(deviceId);
-      // Re-fetch the list for the parent core site
       dispatch(fetchCoreDevicesForSite(coreSiteId));
     } catch (error) {
       return rejectWithValue(error.message);
@@ -101,21 +108,33 @@ const coreDevicesSlice = createSlice({
   initialState,
   reducers: {},
   extraReducers: (builder) => {
-    // --- THIS IS THE FIX: Each .addCase is a separate statement ---
+    // --- Master Thunk Reducers ---
     builder.addCase(fetchAllCoreDevices.pending, (state) => {
       state.status = "loading";
       state.error = null;
     });
-    builder.addCase(fetchAllCoreDevices.fulfilled, (state) => {
+    builder.addCase(fetchAllCoreDevices.fulfilled, (state, action) => {
+      // `action.payload` is the flat array of all devices returned by the thunk.
+      // `setAll` correctly populates BOTH `state.ids` and `state.entities`.
+      // This is the key fix for this slice.
+      if (action.payload) {
+        coreDevicesAdapter.setAll(state, action.payload);
+      }
       state.status = "succeeded";
     });
     builder.addCase(fetchAllCoreDevices.rejected, (state, action) => {
       state.status = "failed";
       state.error = action.payload;
     });
+
+    // --- Child Thunk Reducer ---
+    // This is still useful for targeted updates (add/delete) and to ensure
+    // data is always fresh, even if it's redundant during the initial load.
     builder.addCase(fetchCoreDevicesForSite.fulfilled, (state, action) => {
       coreDevicesAdapter.upsertMany(state, action.payload);
     });
+
+    // --- Logout Reducer ---
     builder.addCase(logout.type, () => {
       return initialState;
     });
