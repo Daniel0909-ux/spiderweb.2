@@ -15,7 +15,7 @@ import { Loader2, AlertTriangle } from "lucide-react";
 // --- CORRECTED: Import all the necessary status selectors directly ---
 import { selectCoreSitesStatus } from "../../redux/slices/coreSitesSlice";
 import { selectCoreDevicesStatus } from "../../redux/slices/coreDevicesSlice";
-import { selectTenGigLinksStatus } from "../../redux/slices/tenGigLinksSlice";
+import { selectLinksStatus } from "../../redux/slices/linksSlice";
 import { selectSitesStatus } from "../../redux/slices/sitesSlice";
 
 // This selector now directly uses the imported selectors. This is the correct pattern.
@@ -23,7 +23,7 @@ const selectCoreDataStatus = createSelector(
   [
     selectCoreSitesStatus,
     selectCoreDevicesStatus, // <<< The imported selector is now used here.
-    selectTenGigLinksStatus,
+    selectLinksStatus,
     selectSitesStatus,
   ],
   (coreSites, coreDevices, links, sites) => ({

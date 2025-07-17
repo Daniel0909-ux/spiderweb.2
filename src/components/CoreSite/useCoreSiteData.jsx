@@ -12,9 +12,10 @@ import { useSelector } from "react-redux";
 import { useParams, useNavigate } from "react-router-dom";
 import { useNodeLayout } from "./useNodeLayout";
 
-// --- 1. UPDATED: Import new selectors ---
+// --- Import new selectors ---
 import { selectAllSites } from "../../redux/slices/sitesSlice";
-import { selectLinksByTypeId } from "../../redux/slices/tenGigLinksSlice";
+// --- 1. THIS IS THE FIX: Import the new selector from linksSlice ---
+import { selectLinksByNetworkId } from "../../redux/slices/linksSlice";
 import { selectAllCoreDevices } from "../../redux/slices/coreDevicesSlice";
 import { selectAllCoreSites } from "../../redux/slices/coreSitesSlice";
 
@@ -23,28 +24,29 @@ export function useCoreSiteData(chartType) {
   const navigate = useNavigate();
   const containerRef = useRef(null);
 
-  // --- 2. UPDATED: Use new selectors ---
+  // --- Use new selectors ---
   const allCoreSites = useSelector(selectAllCoreSites);
   const allDevices = useSelector(selectAllCoreDevices);
   const allSites = useSelector(selectAllSites);
+
+  // --- 2. THIS IS THE FIX: Use the new selector here ---
+  // Determine the networkId (1 for L-Chart, 2 for P-Chart) and pass it to the selector.
+  const networkId = chartType === "P" ? 2 : 1;
   const allLinksForChart = useSelector((state) =>
-    selectLinksByTypeId(state, chartType === "P" ? 2 : 1)
+    selectLinksByNetworkId(state, networkId)
   );
 
-  // --- 3. UPDATED: Memoized logic for getting devices in the current zone ---
+  // --- Memoized logic for getting devices in the current zone (This part is correct) ---
   const devicesForZone = useMemo(() => {
     if (!zoneId || !allCoreSites.length || !allDevices.length) return [];
-
-    // Find the current core site by its name (which is the zoneId from the URL)
     const currentCoreSite = allCoreSites.find((site) => site.name === zoneId);
     if (!currentCoreSite) return [];
-
-    // Filter all devices to find those belonging to this core site's ID
     return allDevices.filter(
       (device) => device.core_site_id === currentCoreSite.id
     );
   }, [zoneId, allDevices, allCoreSites]);
 
+  // The rest of the hook is correct and does not need further changes.
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [showExtendedNodes, setShowExtendedNodes] = useState(false);
@@ -57,7 +59,6 @@ export function useCoreSiteData(chartType) {
     if (!selectedNodeId || !allDevices.length || !allSites.length) {
       return [];
     }
-    // 4. UPDATED: Find the device by `name` instead of `hostname`
     const focusedDevice = allDevices.find((d) => d.name === selectedNodeId);
 
     if (focusedDevice) {
@@ -68,7 +69,6 @@ export function useCoreSiteData(chartType) {
 
   useEffect(() => {
     if (devicesForZone.length > 0 && !selectedNodeId) {
-      // 5. UPDATED: Use `name` instead of `hostname` for the initial node ID
       const initialNodeId = nodeIdFromUrl || devicesForZone[0].name;
       setSelectedNodeId(initialNodeId);
       setPreviousSelectedNodeId(initialNodeId);
@@ -113,7 +113,7 @@ export function useCoreSiteData(chartType) {
     dimensions.height,
     showExtendedNodes,
     animateExtendedLayoutUp,
-    devicesForZone, // This already has the correct devices
+    devicesForZone,
     allLinksForChart
   );
 
@@ -127,7 +127,6 @@ export function useCoreSiteData(chartType) {
       const nextShowExtended = !prevShowExtended;
       if (nextShowExtended) {
         setPreviousSelectedNodeId(selectedNodeId);
-        // 6. UPDATED: Use `name` instead of `hostname`
         const newSelected = devicesForZone[2]?.name;
         if (newSelected) setSelectedNodeId(newSelected);
       } else {
@@ -148,9 +147,6 @@ export function useCoreSiteData(chartType) {
       setSelectedNodeId(clickedNodeData.id);
     }
   };
-
-  // (The rest of the hook's functions are unchanged as they don't depend on the old data structure)
-  // ... addOrActivateTab, handleCloseTab, handleNavigateToSite, handleSiteClick, handleLinkClick ...
 
   const addOrActivateTab = useCallback((payload) => {
     const { id, type } = payload;

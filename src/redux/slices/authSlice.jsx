@@ -8,37 +8,40 @@ import { fetchNetworks } from "./networksSlice";
 import { fetchAllCoreSites } from "./coreSitesSlice";
 import { fetchAllCoreDevices } from "./coreDevicesSlice";
 import { fetchSites } from "./sitesSlice";
-import { fetchTenGigLinks } from "./tenGigLinksSlice";
+import { fetchAllLinks } from "./linksSlice";
 
 // This thunk's only job is to dispatch all the other data-fetching actions in parallel.
 export const fetchInitialData = createAsyncThunk(
   "auth/fetchInitialData",
   async (_, { dispatch, getState }) => {
-    // Step A: Fetch networks first.
+    // Step A: Fetch networks
     const networksAction = await dispatch(fetchNetworks());
+    if (fetchNetworks.rejected.match(networksAction)) return;
 
-    // Step B: If networks were fetched, fetch their core sites.
-    if (fetchNetworks.fulfilled.match(networksAction)) {
-      const networks = networksAction.payload;
-      const networkIds = Array.isArray(networks)
-        ? networks.map((n) => n.id)
-        : [];
-
-      if (networkIds.length > 0) {
-        // This thunk dispatches many individual fetches. We wait for the "master" thunk to complete.
-        await dispatch(fetchAllCoreSites(networkIds));
-
-        // Step C: Now that sites are fetched, get all their IDs from the state to fetch their devices.
-        const allCoreSites = getState().coreSites.entities;
-        const allCoreSiteIds = Object.keys(allCoreSites);
-
-        if (allCoreSiteIds.length > 0) {
-          await dispatch(fetchAllCoreDevices(allCoreSiteIds));
-        }
-      }
+    // Step B: Fetch core sites
+    const networkIds = getState().networks.ids;
+    if (networkIds.length > 0) {
+      await dispatch(fetchAllCoreSites(networkIds));
+    } else {
+      return;
     }
+
+    // Step C: Fetch core devices
+    const coreSiteIds = getState().coreSites.ids;
+    if (coreSiteIds.length > 0) {
+      await dispatch(fetchAllCoreDevices(coreSiteIds));
+    } else {
+      return;
+    }
+
+    // Step D: Fetch all links for the core devices
+    const coreDeviceIds = getState().coreDevices.ids;
+    if (coreDeviceIds.length > 0) {
+      await dispatch(fetchAllLinks(coreDeviceIds));
+    }
+
+    // Step E: Fetch any other independent data
     dispatch(fetchSites());
-    dispatch(fetchTenGigLinks());
   }
 );
 

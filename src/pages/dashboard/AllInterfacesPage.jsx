@@ -9,25 +9,24 @@ import {
   XCircle,
   Search,
   BarChart2,
-} from "lucide-react"; // <-- Import a new icon
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 // --- Custom Hooks & Slices ---
 import { useInterfaceData } from "../useInterfaceData";
-import { fetchInitialData } from "../../redux/slices/authSlice"; // For the retry action
+import { fetchInitialData } from "../../redux/slices/authSlice";
 
 // --- UI & Feedback Components ---
 import { Button } from "../../components/ui/button";
 import { VirtualizedTable } from "../../components/ui/VirtualizedTable";
 import { ErrorMessage } from "../../components/ui/feedback/ErrorMessage";
 
-import { useNavigate } from "react-router-dom";
+// --- 1. THIS IS THE FIX: Import the status selectors from their new slices ---
+import { selectSitesStatus } from "../../redux/slices/sitesSlice";
+import { selectLinksStatus } from "../../redux/slices/linksSlice";
+import { selectCoreDevicesStatus } from "../../redux/slices/coreDevicesSlice";
 
-// --- Status Selectors ---
-const selectSitesStatus = (state) => state.sites.status;
-const selectLinksStatus = (state) => state.tenGigLinks.status;
-const selectDevicesStatus = (state) => state.devices.status;
-
-// --- Reusable Helper Components (can be moved to a shared file if needed) ---
+// --- Reusable Helper Components (Unchanged) ---
 const StatusIndicator = ({ status }) => {
   const config = {
     Up: { color: "text-green-500", Icon: ArrowUp, label: "Up" },
@@ -71,12 +70,12 @@ export default function AllInterfacesPage() {
   const { interfaces, handleToggleFavorite, deviceFilterOptions } =
     useInterfaceData();
 
-  // --- Get status from all required data slices ---
+  // --- 2. THIS IS THE FIX: Use the imported selectors directly ---
   const sitesStatus = useSelector(selectSitesStatus);
   const linksStatus = useSelector(selectLinksStatus);
-  const devicesStatus = useSelector(selectDevicesStatus); // Added device status check
+  const devicesStatus = useSelector(selectCoreDevicesStatus);
 
-  // --- Derive loading and error states from all dependencies ---
+  // Derive loading and error states from all dependencies
   const isLoading =
     sitesStatus === "loading" ||
     linksStatus === "loading" ||
@@ -86,14 +85,13 @@ export default function AllInterfacesPage() {
     linksStatus === "failed" ||
     devicesStatus === "failed";
 
-  // --- Local UI state for filters ---
+  // Local UI state for filters
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [deviceFilter, setDeviceFilter] = useState("all");
   const [linkTypeFilter, setLinkTypeFilter] = useState("all");
-  const [expandedRowId, setExpandedRowId] = useState(null); // <-- NEW STATE
+  const [expandedRowId, setExpandedRowId] = useState(null);
 
-  // --- 2. The click handler to toggle the expanded row ---
   const handleRowClick = (rowId) => {
     setExpandedRowId((prevId) => (prevId === rowId ? null : rowId));
   };
@@ -117,31 +115,24 @@ export default function AllInterfacesPage() {
     });
   }, [interfaces, statusFilter, deviceFilter, linkTypeFilter, searchTerm]);
 
-  // --- 3. Create the final data array for the virtualizer ---
   const virtualizerData = useMemo(() => {
     if (!expandedRowId) {
-      // If no row is expanded, just return the filtered data.
       return filteredInterfaces;
     }
-
     const dataWithDetails = [];
     for (const item of filteredInterfaces) {
-      // Add the normal item first.
       dataWithDetails.push(item);
-      // If this item is the one that's expanded...
       if (item.id === expandedRowId) {
-        // ...inject a special "detail" object right after it.
         dataWithDetails.push({
-          id: `${item.id}-detail`, // Create a unique ID for the detail row
-          isDetail: true, // A flag our table will look for
-          originalData: item, // Pass the original data to the detail component
+          id: `${item.id}-detail`,
+          isDetail: true,
+          originalData: item,
         });
       }
     }
     return dataWithDetails;
   }, [filteredInterfaces, expandedRowId]);
 
-  // Memoized column definitions for the virtualized table
   const columns = useMemo(
     () => [
       {
@@ -215,16 +206,14 @@ export default function AllInterfacesPage() {
       {
         accessorKey: "actions",
         header: "Actions",
-        size: 1.5, // Make it a bit wider to fit both buttons
+        size: 1.5,
         cell: ({ row }) => (
           <div className="flex justify-end items-center gap-1">
-            {/* The new statistics button */}
             <Button
               variant="ghost"
               size="icon"
               onClick={(e) => {
-                e.stopPropagation(); // Prevent the row click from firing
-                // Navigate to the new forensics page with the link's ID
+                e.stopPropagation();
                 navigate(`/forensics/link/${row.id}`);
               }}
               aria-label="View Link Statistics"
@@ -243,7 +232,6 @@ export default function AllInterfacesPage() {
     dispatch(fetchInitialData());
   };
 
-  // --- Define Empty/Error states to pass to the table component ---
   const EmptyState = (
     <div className="text-center py-16 px-4 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg">
       <Search
@@ -259,7 +247,6 @@ export default function AllInterfacesPage() {
     </div>
   );
 
-  // This is the key: choose which message to show based on the error status.
   const emptyMessage = hasError ? (
     <ErrorMessage
       onRetry={handleRetry}
@@ -279,11 +266,8 @@ export default function AllInterfacesPage() {
           Search, filter, and manage all interfaces across the network.
         </p>
       </header>
-
       <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md flex-shrink-0">
-        {/* Change the grid layout to accommodate 4 items */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Search Input */}
           <div>
             <label
               htmlFor="search-interfaces"
@@ -300,7 +284,6 @@ export default function AllInterfacesPage() {
               className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             />
           </div>
-          {/* Device Filter */}
           <div>
             <label
               htmlFor="device-filter"
@@ -321,7 +304,6 @@ export default function AllInterfacesPage() {
               ))}
             </select>
           </div>
-          {/* Status Filter */}
           <div>
             <label
               htmlFor="status-filter"
@@ -362,14 +344,8 @@ export default function AllInterfacesPage() {
           </div>
         </div>
       </div>
-
       <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md flex-grow min-h-0">
         <VirtualizedTable
-          // --- THIS IS THE FIX ---
-          // By adding a key that changes when the expanded row changes,
-          // we tell React to unmount the old table and mount a brand new one.
-          // This forces the useVirtualizer hook to run from scratch and
-          // correctly calculate the new layout.
           key={expandedRowId || "none"}
           data={virtualizerData}
           columns={columns}

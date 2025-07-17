@@ -64,34 +64,61 @@ export const fetchAllCoreDevices = createAsyncThunk(
   }
 );
 
+// --- NEW: Add Core Device Thunk ---
+export const addCoreDevice = createAsyncThunk(
+  "coreDevices/addCoreDevice",
+  async (deviceData, { dispatch, rejectWithValue }) => {
+    // deviceData must include parent core_site_id, e.g., { name: 'Router A', core_site_id: 456 }
+    try {
+      await api.addCoreDevice(deviceData);
+      // Re-fetch only the devices for the affected core site
+      dispatch(fetchCoreDevicesForSite(deviceData.core_site_id));
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// --- NEW: Delete Core Device Thunk ---
+export const deleteCoreDevice = createAsyncThunk(
+  "coreDevices/deleteCoreDevice",
+  async (payload, { dispatch, rejectWithValue }) => {
+    // Payload must be an object: { deviceId: 789, coreSiteId: 456 }
+    const { deviceId, coreSiteId } = payload;
+    try {
+      await api.deleteCoreDevice(deviceId);
+      // Re-fetch the list for the parent core site
+      dispatch(fetchCoreDevicesForSite(coreSiteId));
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 // --- THE SLICE DEFINITION ---
 const coreDevicesSlice = createSlice({
   name: "coreDevices",
   initialState,
   reducers: {},
   extraReducers: (builder) => {
-    builder
-      // Reducer for the "master" fetch thunk
-      .addCase(fetchAllCoreDevices.pending, (state) => {
-        state.status = "loading";
-        state.error = null;
-      })
-      .addCase(fetchAllCoreDevices.fulfilled, (state) => {
-        state.status = "succeeded";
-      })
-      .addCase(fetchAllCoreDevices.rejected, (state, action) => {
-        state.status = "failed";
-        state.error = action.payload;
-      })
-      // Reducer for the INDIVIDUAL site fetch thunk
-      .addCase(fetchCoreDevicesForSite.fulfilled, (state, action) => {
-        // action.payload is the array of devices, already with the core_site_id
-        coreDevicesAdapter.upsertMany(state, action.payload);
-      })
-      // --- Reducer for Logout ---
-      .addCase(logout.type, () => {
-        return initialState;
-      });
+    // --- THIS IS THE FIX: Each .addCase is a separate statement ---
+    builder.addCase(fetchAllCoreDevices.pending, (state) => {
+      state.status = "loading";
+      state.error = null;
+    });
+    builder.addCase(fetchAllCoreDevices.fulfilled, (state) => {
+      state.status = "succeeded";
+    });
+    builder.addCase(fetchAllCoreDevices.rejected, (state, action) => {
+      state.status = "failed";
+      state.error = action.payload;
+    });
+    builder.addCase(fetchCoreDevicesForSite.fulfilled, (state, action) => {
+      coreDevicesAdapter.upsertMany(state, action.payload);
+    });
+    builder.addCase(logout.type, () => {
+      return initialState;
+    });
   },
 });
 

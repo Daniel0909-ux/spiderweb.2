@@ -76,118 +76,42 @@ export const api = {
    */
   getCoreDevicesByCoreSite: (coreSiteId) =>
     handleApiCall(apiClient.get(`/coresite/${coreSiteId}/coredevices`)),
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-
-  // --- GET Endpoints ---
-  getTenGigLines: () => handleApiCall(apiClient.get("/get_ten_gig_lines")),
-  //getNetTypes: () => handleApiCall(apiClient.get("/get_net_types")),
-  //getCorePikudim: () => handleApiCall(apiClient.get("/get_core_pikudim")),
-  //getCoreDevices: () => handleApiCall(apiClient.get("/get_core_devices")),
-  getSites: () => handleApiCall(apiClient.get("/get_sites")),
-
-  // --- POST (Create/Add) Endpoints ---
-  addCorePikudim: (pikudData) =>
-    handleApiCall(apiClient.post("/add_core_pikudim", pikudData)),
-  addCoreDevice: (deviceData) =>
-    handleApiCall(apiClient.post("/add_core_device", deviceData)),
-  addNetType: (netTypeData) =>
-    handleApiCall(apiClient.post("/add_net_type", netTypeData)),
   /**
-   * Triggers a WAN connection check for a specific segment and site.
-   * @param {object} networkData - Object with management_segment and sda_site_id.
-   * @returns {Promise<any>} A promise that resolves to the connection check result.
+   * Fetches links between a core device and other core devices.
+   * @param {string|number} coreDeviceId - The ID of the core device.
+   * @returns {Promise<Array<any>>} A list of core-to-core links.
    */
-  getWanConnection: (networkData) =>
-    handleApiCall(apiClient.post("/get_wan_connection", networkData)),
-
-  // --- PUT (Update/Action) Endpoints ---
-  /**
-   * Triggers a refresh of all interfaces for a specific device.
-   * @param {string|number} deviceId - The ID of the device to refresh.
-   * @returns {Promise<object>} A promise that resolves to the confirmation/status response.
-   */
-  refreshInterfacesPerDevice: (deviceId) =>
-    handleApiCall(apiClient.put(`/refresh_interfaces_per_device/${deviceId}`)),
+  getCoreToCoreLinks: (coreDeviceId) =>
+    handleApiCall(apiClient.get(`/coreDevice/${coreDeviceId}/links`)),
 
   /**
-   * Triggers a refresh for a single, specific interface.
-   * @param {object} refreshData - The data for the refresh (e.g., { device_id: 1, interface: 'Gig0/1' }).
-   * @returns {Promise<object>} A promise that resolves to the confirmation/status response.
+   * Fetches links between a core device and its connected end-sites.
+   * @param {string|number} coreDeviceId - The ID of the core device.
+   * @returns {Promise<Array<any>>} A list of core-to-site links.
    */
-  refreshInterface: (refreshData) =>
-    handleApiCall(apiClient.put(`/refresh_interface`, refreshData)),
+  getCoreToSiteLinks: (coreDeviceId) =>
+    handleApiCall(apiClient.get(`/device/${coreDeviceId}/end-sites`)),
+
+  // Note: We are not using getEndSiteLinks for the initial load,
+  // but it's good to have it defined for future features.
+  /**
+   * Fetches links for a specific end-site.
+   * @param {string|number} endSiteId - The ID of the end-site.
+   * @returns {Promise<Array<any>>} A list of links for that site.
+   */
+  getEndSiteLinks: (endSiteId) =>
+    handleApiCall(apiClient.get(`/endsites/${endSiteId}/links`)),
+  /**
+   * Fetches a list of all end-sites (basic info).
+   * @returns {Promise<Array<any>>} A list of end-sites.
+   */
+  getEndSites: () => handleApiCall(apiClient.get("/endsites")),
 
   /**
-   * Marks a specific alert as a favorite.
-   * @param {string|number} alertId - The ID of the alert to favorite.
-   * @returns {Promise<object>} A promise that resolves to the confirmation response.
+   * Fetches detailed metadata for a single end-site.
+   * @param {string|number} endSiteId - The ID of the end-site.
+   * @returns {Promise<object>} Detailed data for one end-site.
    */
-  favoriteAlert: (alertId) =>
-    handleApiCall(apiClient.put(`/favorite_alert/${alertId}`)),
-
-  // --- DELETE Endpoints ---
-  deleteCorePikudim: (corePikudimId) =>
-    handleApiCall(apiClient.delete(`/delete_core_pikudim/${corePikudimId}`)),
-  deleteDevice: (deviceId) =>
-    handleApiCall(apiClient.delete(`/delete_device/${deviceId}`)),
-  deleteNetType: (netTypeId) =>
-    handleApiCall(apiClient.delete(`/delete_net_type/${netTypeId}`)),
-  /**
-   * Deletes a specific alert by its ID.
-   * @param {string|number} alertId - The ID of the alert to delete.
-   * @returns {Promise<object>} A promise that resolves to the confirmation response.
-   */
-  deleteAlert: (alertId) =>
-    handleApiCall(apiClient.delete(`/delete_alert/${alertId}`)),
-
-  // --- ALERTS Endpoints ---
-  /**
-   * Fetches all alerts from the database.
-   * @returns {Promise<Array<object>>} A promise that resolves to a list of alert objects.
-   */
-  getAllAlerts: () => handleApiCall(apiClient.get("/get_all_alerts")),
-
-  /**
-   * Fetches the status of all alerts.
-   * @returns {Promise<any>} A promise that resolves to the alert status data.
-   */
-  getAllAlertsStatus: () =>
-    handleApiCall(apiClient.get("/get_all_alerts_status")),
-
-  /**
-   * Fetches the severity of all alerts.
-   * @returns {Promise<any>} A promise that resolves to the alert severity data.
-   */
-  getAllAlertsSeverity: () =>
-    handleApiCall(apiClient.get("/get_all_alerts_severity")),
-
-  /**
-   * Fetches the favorite link IDs for the currently authenticated user.
-   * @returns {Promise<Array<string>>} A promise that resolves to an array of link IDs.
-   */
-  getFavoriteLinks: () =>
-    handleApiCall(apiClient.get("/users/me/favorites/links")),
-
-  /**
-   * Replaces the user's list of favorite links on the server.
-   * @param {Array<string>} linkIds - The complete new array of favorite link IDs.
-   * @returns {Promise<object>} A promise that resolves to the server's confirmation response.
-   */
-  updateFavoriteLinks: (linkIds) =>
-    handleApiCall(
-      apiClient.put("/users/me/favorites/links", { link_ids: linkIds })
-    ),
+  getEndSiteById: (endSiteId) =>
+    handleApiCall(apiClient.get(`/endsites/${endSiteId}`)),
 };

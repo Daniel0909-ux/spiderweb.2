@@ -20,7 +20,7 @@ import {
 import {
   selectLinksByTypeId,
   selectTenGigLinksStatus,
-} from "../../redux/slices/tenGigLinksSlice";
+} from "../../redux/slices/linksSlice";
 
 // --- Feedback Components ---
 import { LoadingSpinner } from "../../components/ui/feedback/LoadingSpinner";

@@ -3,7 +3,7 @@
 import { configureStore, combineReducers } from "@reduxjs/toolkit";
 import sitesReducer from "./slices/sitesSlice";
 import coreDevicesReducer from "./slices/coreDevicesSlice";
-import tenGigLinksReducer from "./slices/tenGigLinksSlice";
+import linksReducer from "./slices/linksSlice";
 import coreSitesReducer from "./slices/coreSitesSlice";
 import favoritesReducer from "./slices/favoritesSlice";
 import networksReducer from "./slices/networksSlice";
@@ -17,7 +17,7 @@ import realtimeMiddleware from "./middleware/realtimeMiddleware";
 const appReducer = combineReducers({
   sites: sitesReducer,
   coreDevices: coreDevicesReducer,
-  tenGigLinks: tenGigLinksReducer,
+  links: linksReducer,
   coreSites: coreSitesReducer,
   favorites: favoritesReducer,
   networks: networksReducer,

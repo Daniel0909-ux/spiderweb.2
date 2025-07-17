@@ -1,11 +1,14 @@
-// Import the new actions
-import { updateTenGigLink } from "../redux/slices/tenGigLinksSlice";
+// src/services/realtimeService.js
+
+// --- 1. UPDATED IMPORTS ---
+// Import the new action `updateLinkStatus` and the new selector `selectAllLinks` from the correct slice.
+import { updateLinkStatus, selectAllLinks } from "../redux/slices/linksSlice";
 import { connectionEstablished } from "../redux/slices/realtimeSlice";
 import { addRealtimeAlert } from "../redux/slices/alertsSlice";
 import { addNotification } from "../redux/slices/uiSlice";
-import { faker } from "@faker-js/faker"; // Make sure faker is imported if not already
+import { faker } from "@faker-js/faker";
 
-// --- Helper to generate a single alert ---
+// --- Helper to generate a single alert (Unchanged) ---
 const generateSingleMockAlert = () => {
   const types = ["error", "warning", "info"];
   const messages = [
@@ -30,7 +33,7 @@ const generateSingleMockAlert = () => {
 
 const realtimeService = {
   linkIntervalId: null,
-  alertIntervalId: null, // Separate interval for alerts
+  alertIntervalId: null,
 
   start(dispatch, getState) {
     if (this.linkIntervalId || this.alertIntervalId) {
@@ -39,32 +42,36 @@ const realtimeService = {
 
     dispatch(connectionEstablished());
 
-    // --- Interval for updating link status (as before) ---
+    // --- Interval for updating link status ---
     this.linkIntervalId = setInterval(() => {
-      const { items: allLinks } = getState().tenGigLinks;
+      // --- 2. UPDATED: Get links from the new state structure ---
+      // The `links` slice uses an entity adapter, so we use the `selectAllLinks` selector.
+      const state = getState();
+      const allLinks = selectAllLinks(state);
+
       if (allLinks && allLinks.length > 0) {
+        // This logic to pick a random link remains the same
         const randomLink =
           allLinks[Math.floor(Math.random() * allLinks.length)];
         const statuses = ["up", "down", "issue"];
         const currentStatusIndex = statuses.indexOf(randomLink.status);
         const nextStatus = statuses[(currentStatusIndex + 1) % statuses.length];
-        dispatch(updateTenGigLink({ id: randomLink.id, status: nextStatus }));
+
+        // --- 3. UPDATED: Dispatch the new action name ---
+        dispatch(updateLinkStatus({ id: randomLink.id, status: nextStatus }));
       }
     }, 3500);
 
-    // --- NEW: Interval for generating new alerts ---
+    // --- Interval for generating new alerts (Unchanged) ---
     this.alertIntervalId = setInterval(() => {
       console.log("[RealtimeService] Firing new alert...");
       const newAlert = generateSingleMockAlert();
-
-      // 1. Add the alert to the main list (unchanged)
       dispatch(addRealtimeAlert(newAlert));
-
-      // 2. Dispatch the action to ADD the notification to the UI queue
-      dispatch(addNotification(newAlert)); // <-- THIS IS THE CHANGED LINE
-    }, 12000); // Generate a new alert every 12 seconds
+      dispatch(addNotification(newAlert));
+    }, 12000);
   },
 
+  // The stop method is correct and does not need changes.
   stop() {
     if (this.linkIntervalId) {
       clearInterval(this.linkIntervalId);

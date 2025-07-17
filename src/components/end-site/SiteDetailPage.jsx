@@ -1,27 +1,28 @@
 // src/components/end-site/SiteDetailPage.jsx
 
 import React, { useState, useEffect, useMemo } from "react";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import LinkDetailRow from "./LineDetailExtend";
 import StatusBulb from "../shared/StatusBulb";
 import { selectAllCoreDevices } from "../../redux/slices/coreDevicesSlice";
-// Make sure you have a way to import your api service.
-// This might need to be created or adjusted based on your project structure.
-// For now, we'll assume a placeholder api object.
+import {
+  fetchSiteDetails,
+  selectSiteById,
+} from "../../redux/slices/sitesSlice";
+
+// --- Mock/Placeholder API ---
+// This simulates the API service for fetching the internal site topology.
+// In a real app, this would be part of your main API service file.
 const api = {
   getWanConnection: async (networkData) => {
     console.log("Fetching WAN connection for:", networkData);
-    // Simulate API call
-    await new Promise((res) => setTimeout(res, 800));
-    // In a real scenario, this would return data from the backend.
-    // For now, we return mock data.
+    await new Promise((res) => setTimeout(res, 800)); // Simulate network delay
     return createSiteInternalTopology();
   },
 };
 
-// Helper function for generating a complex site topology (NO CHANGES)
+// Helper function for generating a complex site topology
 const createSiteInternalTopology = () => {
-  // ... (this function remains unchanged)
   const nodes = [];
   const links = [];
   const nodeTypes = ["Firewall", "Router", "Switch", "Server"];
@@ -48,29 +49,10 @@ const createSiteInternalTopology = () => {
       status: Math.random() > 0.1 ? "up" : "down",
     });
   }
-
-  const extraLinks = Math.floor(Math.random() * 2) + 1;
-  for (let i = 0; i < extraLinks; i++) {
-    const sourceNode = nodes[Math.floor(Math.random() * numNodes)];
-    const targetNode = nodes[Math.floor(Math.random() * numNodes)];
-    const linkExists = links.some(
-      (l) =>
-        (l.source === sourceNode.id && l.target === targetNode.id) ||
-        (l.source === targetNode.id && l.target === sourceNode.id)
-    );
-    if (sourceNode.id !== targetNode.id && !linkExists) {
-      links.push({
-        id: `extra-link-${i}`,
-        source: sourceNode.id,
-        target: targetNode.id,
-        status: Math.random() > 0.1 ? "up" : "down",
-      });
-    }
-  }
-
   return { nodes, links };
 };
 
+// Loading component for the topology diagram
 const TopologyLoader = () => (
   <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
     <svg
@@ -98,18 +80,65 @@ const TopologyLoader = () => (
 );
 
 const SiteDetailPage = ({ siteGroup, initialTheme = "light" }) => {
-  const [theme, setTheme] = useState(initialTheme);
-  const [expandedLinkId, setExpandedLinkId] = useState(null);
+  const dispatch = useDispatch();
+  const primarySiteFromGroup = siteGroup?.[0];
+  const siteId = primarySiteFromGroup?.id;
+
+  // --- 1. ON-DEMAND DATA FETCHING & SELECTION ---
+  useEffect(() => {
+    // When the component mounts with a siteId, dispatch an action to fetch its full details.
+    if (siteId) {
+      dispatch(fetchSiteDetails(siteId));
+    }
+  }, [siteId, dispatch]);
+
+  // Select the most up-to-date data for this site from the store.
+  const detailedSiteData = useSelector((state) =>
+    selectSiteById(state, siteId)
+  );
+  // Use the detailed data if it exists, otherwise fall back to the basic data from props.
+  const primarySite = detailedSiteData || primarySiteFromGroup;
+
+  // --- 2. SELECTORS FOR DEPENDENT DATA ---
   const allDevices = useSelector(selectAllCoreDevices);
 
+  // --- 3. LOCAL STATE MANAGEMENT ---
+  const [theme, setTheme] = useState(initialTheme);
+  const [expandedLinkId, setExpandedLinkId] = useState(null);
   const [topologyData, setTopologyData] = useState({ nodes: [], links: [] });
   const [topologyStatus, setTopologyStatus] = useState("loading");
 
+  // --- 4. MEMOIZED DATA TRANSFORMATIONS ---
   const deviceMap = useMemo(
     () => new Map(allDevices.map((d) => [d.id, d])),
     [allDevices]
   );
 
+  const siteConnectionsData = useMemo(() => {
+    if (!siteGroup || siteGroup.length === 0) return [];
+    return siteGroup.map((connection) => {
+      const device = deviceMap.get(connection.device_id);
+      return {
+        id: connection.id,
+        // Use `device.name` which is the new, correct property
+        name: `Connection to ${device?.name || "Unknown Device"}`,
+        description: `Interface ID: ${connection.interface_id}`,
+        status: "up",
+        ospfStatus: "N/A",
+        mplsStatus: "N/A",
+        bandwidth: "1 Gbps",
+        additionalDetails: {
+          mediaType: "Fiber/Copper",
+          siteId: connection.id,
+          deviceId: connection.device_id,
+          deviceName: device?.name, // Use name here as well
+          interfaceId: connection.interface_id,
+        },
+      };
+    });
+  }, [siteGroup, deviceMap]);
+
+  // --- 5. EFFECTS for UI and ASYNC operations ---
   useEffect(() => {
     const rootHtmlElement = document.documentElement;
     const observer = new MutationObserver(() => {
@@ -123,7 +152,7 @@ const SiteDetailPage = ({ siteGroup, initialTheme = "light" }) => {
   }, []);
 
   useEffect(() => {
-    if (!siteGroup || siteGroup.length === 0) {
+    if (!primarySite) {
       setTopologyStatus("idle");
       return;
     }
@@ -131,76 +160,39 @@ const SiteDetailPage = ({ siteGroup, initialTheme = "light" }) => {
     const fetchTopology = async () => {
       setTopologyStatus("loading");
       try {
-        const primarySite = siteGroup[0];
         const device = deviceMap.get(primarySite.device_id);
-
         const networkData = {
           sda_site_id: primarySite.id,
-          // Assuming `management_segment` is a property on your device object.
-          // Adjust if the property name is different.
           management_segment: device?.management_segment || "default-segment",
         };
-
-        // --- THIS IS THE FIX ---
-        // 1. UNCOMMENTED: Use the real API call with the networkData variable.
         const data = await api.getWanConnection(networkData);
-
-        // 2. REMOVED: The simulated API call is no longer needed here.
-
         setTopologyData(data);
         setTopologyStatus("succeeded");
       } catch (error) {
         console.error("Failed to fetch site topology:", error);
         setTopologyStatus("failed");
-        // The fallback to mock data on error is a good pattern to keep.
         setTopologyData(createSiteInternalTopology());
       }
     };
 
     fetchTopology();
-  }, [siteGroup, deviceMap]);
+  }, [primarySite, deviceMap]);
 
-  // The rest of the component logic remains the same, but it's updated for correctness
-  const siteConnectionsData = useMemo(() => {
-    if (!siteGroup || siteGroup.length === 0) return [];
-    return siteGroup.map((connection) => {
-      const device = deviceMap.get(connection.device_id);
-      return {
-        id: connection.id,
-        name: `Connection to ${device?.name || "Unknown Device"}`,
-        description: `Interface ID: ${connection.interface_id}`,
-        status: "up",
-        ospfStatus: "N/A",
-        mplsStatus: "N/A",
-        bandwidth: "1 Gbps",
-        additionalDetails: {
-          mediaType: "Fiber/Copper",
-          siteId: connection.id,
-          deviceId: connection.device_id,
-          deviceName: device?.name,
-          interfaceId: connection.interface_id,
-        },
-      };
-    });
-  }, [siteGroup, deviceMap]);
-
-  if (!siteGroup || siteGroup.length === 0) {
+  // --- 6. RENDER LOGIC ---
+  if (!primarySite) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-white dark:bg-gray-800">
         <p className="text-xl text-gray-700 dark:text-gray-300">
-          Site data not found. Please select a site from the list.
+          Site data not found or still loading. Please select a site from the
+          list.
         </p>
       </div>
     );
   }
 
-  const primarySite = siteGroup[0];
   const isDark = theme === "dark";
-
-  const handleLinkRowClick = (linkId) => {
-    setExpandedLinkId((prevId) => (prevId === linkId ? null : linkId));
-  };
-
+  const handleLinkRowClick = (linkId) =>
+    setExpandedLinkId((prev) => (prev === linkId ? null : linkId));
   const nodeMap = new Map(topologyData.nodes.map((node) => [node.id, node]));
   const nodeColorMap = {
     Router: isDark ? "fill-blue-400" : "fill-blue-500",
@@ -212,9 +204,7 @@ const SiteDetailPage = ({ siteGroup, initialTheme = "light" }) => {
   return (
     <div className="bg-white dark:bg-gray-800 min-h-screen transition-colors duration-300">
       <div className="p-6">
-        {/* --- TOP HEADER AREA (Two columns) --- */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-8 border-b border-gray-200 dark:border-gray-700">
-          {/* Left Side: Main Title and Description */}
           <header className="md:col-span-2">
             <h1 className="text-4xl font-bold text-gray-800 dark:text-gray-100">
               {primarySite.site_name_english}
@@ -223,11 +213,8 @@ const SiteDetailPage = ({ siteGroup, initialTheme = "light" }) => {
               {primarySite.site_name_hebrew}
             </p>
             <p className="mt-4 text-sm text-gray-600 dark:text-gray-400 max-w-prose">
-              This location serves as a key point of presence, hosting critical
-              infrastructure for regional operations. It is engineered for high
-              availability with fully redundant connections to the core network,
-              ensuring uninterrupted service delivery and robust performance
-              under all conditions.
+              {primarySite.description ||
+                "This location serves as a key point of presence, hosting critical infrastructure for regional operations. It is engineered for high availability with fully redundant connections to the core network."}
             </p>
           </header>
 
@@ -240,7 +227,6 @@ const SiteDetailPage = ({ siteGroup, initialTheme = "light" }) => {
             </h2>
             <div className="bg-gray-100 dark:bg-gray-700 p-2 rounded-lg shadow-md flex items-center justify-center min-h-[200px]">
               {topologyStatus === "loading" && <TopologyLoader />}
-
               {(topologyStatus === "succeeded" ||
                 topologyStatus === "failed") && (
                 <svg
@@ -303,7 +289,6 @@ const SiteDetailPage = ({ siteGroup, initialTheme = "light" }) => {
           </section>
         </div>
 
-        {/* --- MAIN CONTENT: Site Connections Table (Full Width) --- */}
         <section className="mt-12">
           <h2 className="text-2xl font-semibold text-gray-700 dark:text-gray-200 mb-4">
             Site Connections ({siteConnectionsData.length})

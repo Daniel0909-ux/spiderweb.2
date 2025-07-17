@@ -1,22 +1,26 @@
+// src/pages/AdminPanelPage.jsx
+
 import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-// Assuming you have updated your slices to export the async thunks
+import { MdSettings, MdDelete } from "react-icons/md";
+
+// --- 1. UPDATED IMPORTS ---
+// Import actions and selectors from the new, correct slices.
 import {
   addCoreDevice,
   deleteCoreDevice,
-  selectAllDevices,
+  selectAllCoreDevices,
 } from "../redux/slices/coreDevicesSlice";
 import {
   addCoreSite,
   deleteCoreSite,
-  selectAllPikudim,
+  selectAllCoreSites,
 } from "../redux/slices/coreSitesSlice";
 import {
-  addNetType,
-  deleteNetType,
-  selectAllNetTypes,
+  addNetwork,
+  deleteNetwork,
+  selectAllNetworks,
 } from "../redux/slices/networksSlice";
-import { MdSettings, MdDelete } from "react-icons/md";
 
 // Reusable Input Field Component (Unchanged)
 const InputField = ({
@@ -84,10 +88,14 @@ const SelectField = ({
 
 export function AdminPanelPage() {
   const dispatch = useDispatch();
-  const allCoreSites = useSelector(selectAllPikudim);
-  const allDevices = useSelector(selectAllDevices);
-  const allNetTypes = useSelector(selectAllNetTypes);
 
+  // --- 2. UPDATED SELECTORS ---
+  // Point to the new selectors from the refactored slices.
+  const allCoreSites = useSelector(selectAllCoreSites);
+  const allDevices = useSelector(selectAllCoreDevices);
+  const allNetworks = useSelector(selectAllNetworks);
+
+  // Local state management (mostly unchanged)
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeAddSection, setActiveAddSection] = useState(null);
   const [activeDeleteSection, setActiveDeleteSection] = useState(null);
@@ -95,30 +103,28 @@ export function AdminPanelPage() {
 
   const [coreSiteData, setCoreSiteData] = useState({
     name: "",
-    type_id: "",
+    network_id: "",
   });
   const [coreDeviceData, setCoreDeviceData] = useState({
-    hostname: "",
+    name: "",
     ip_address: "",
-    network_type_id: "",
-    core_pikudim_site_id: "",
+    core_site_id: "",
   });
-  const [netTypeData, setNetTypeData] = useState({ name: "" });
+  const [networkData, setNetworkData] = useState({ name: "" });
 
+  // --- 3. UPDATED OPTIONS MAPPING ---
+  // Use the new `name` property for labels.
   const coreSiteOptions = allCoreSites.map((site) => ({
     value: site.id,
-    label: site.core_site_name,
+    label: site.name,
   }));
-  const deviceOptions = allDevices.map((d) => ({
-    value: d.id,
-    label: d.hostname,
-  }));
-  const netTypeOptions = allNetTypes.map((nt) => ({
+  const deviceOptions = allDevices.map((d) => ({ value: d.id, label: d.name }));
+  const networkOptions = allNetworks.map((nt) => ({
     value: nt.id,
     label: nt.name,
   }));
 
-  // --- ASYNC EVENT HANDLERS ---
+  // --- ASYNC EVENT HANDLERS (Unchanged logic, but payloads will be different) ---
   const handleSubmit = async (
     e,
     thunk,
@@ -153,6 +159,7 @@ export function AdminPanelPage() {
     }
     setIsSubmitting(true);
     try {
+      // The `delete` thunks now expect just the ID. The re-fetch logic is handled inside the slice.
       await dispatch(deleteThunk(parseInt(itemToDelete, 10))).unwrap();
       alert(`${entityName} deleted successfully!`);
       setItemToDelete("");
@@ -178,16 +185,16 @@ export function AdminPanelPage() {
         return (
           <form
             onSubmit={(e) =>
+              // --- 4. UPDATED PAYLOAD ---
               handleSubmit(
                 e,
                 addCoreSite,
                 {
-                  name: coreSiteData.name, // Changed from core_site_name
-                  site_type_id: parseInt(coreSiteData.type_id, 10), // Changed from type_id
-                  // "location" is removed as it's not in the backend spec
+                  name: coreSiteData.name,
+                  network_id: parseInt(coreSiteData.network_id, 10),
                 },
                 `Core Site "${coreSiteData.name}" submitted!`,
-                () => setCoreSiteData({ name: "", type_id: "" })
+                () => setCoreSiteData({ name: "", network_id: "" })
               )
             }
             className="mt-6 space-y-4 p-6 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg"
@@ -206,16 +213,16 @@ export function AdminPanelPage() {
                 required
               />
               <SelectField
-                label="Type"
-                id="type_id"
-                value={coreSiteData.type_id}
+                label="Parent Network"
+                id="network_id"
+                value={coreSiteData.network_id}
                 onChange={(e) =>
-                  setCoreSiteData({ ...coreSiteData, type_id: e.target.value })
+                  setCoreSiteData({
+                    ...coreSiteData,
+                    network_id: e.target.value,
+                  })
                 }
-                options={[
-                  { value: 1, label: "L-Chart" },
-                  { value: 2, label: "P-Chart" },
-                ]}
+                options={networkOptions}
                 required
               />
             </div>
@@ -232,22 +239,21 @@ export function AdminPanelPage() {
         return (
           <form
             onSubmit={(e) =>
+              // --- 4. UPDATED PAYLOAD ---
               handleSubmit(
                 e,
                 addCoreDevice,
                 {
-                  hostname: coreDeviceData.hostname,
-                  ip: coreDeviceData.ip_address, // Changed from ip_address
-                  device_net_type: parseInt(coreDeviceData.network_type_id, 10), // Changed from network_type_id
-                  site_id: parseInt(coreDeviceData.core_pikudim_site_id, 10), // Changed from core_pikudim_site_id
+                  name: coreDeviceData.name,
+                  ip_address: coreDeviceData.ip_address,
+                  core_site_id: parseInt(coreDeviceData.core_site_id, 10),
                 },
-                `Device "${coreDeviceData.hostname}" submitted!`,
+                `Device "${coreDeviceData.name}" submitted!`,
                 () =>
                   setCoreDeviceData({
-                    hostname: "",
+                    name: "",
                     ip_address: "",
-                    network_type_id: "",
-                    core_pikudim_site_id: "",
+                    core_site_id: "",
                   })
               )
             }
@@ -258,14 +264,11 @@ export function AdminPanelPage() {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
               <InputField
-                label="Hostname"
-                id="hostname"
-                value={coreDeviceData.hostname}
+                label="Device Name"
+                id="name"
+                value={coreDeviceData.name}
                 onChange={(e) =>
-                  setCoreDeviceData({
-                    ...coreDeviceData,
-                    hostname: e.target.value,
-                  })
+                  setCoreDeviceData({ ...coreDeviceData, name: e.target.value })
                 }
                 required
               />
@@ -283,28 +286,15 @@ export function AdminPanelPage() {
               />
               <SelectField
                 label="Associated Core Site"
-                id="core_pikudim_site_id"
-                value={coreDeviceData.core_pikudim_site_id}
+                id="core_site_id"
+                value={coreDeviceData.core_site_id}
                 onChange={(e) =>
                   setCoreDeviceData({
                     ...coreDeviceData,
-                    core_pikudim_site_id: e.target.value,
+                    core_site_id: e.target.value,
                   })
                 }
                 options={coreSiteOptions}
-                required
-              />
-              <SelectField
-                label="Network Type"
-                id="network_type_id"
-                value={coreDeviceData.network_type_id}
-                onChange={(e) =>
-                  setCoreDeviceData({
-                    ...coreDeviceData,
-                    network_type_id: e.target.value,
-                  })
-                }
-                options={netTypeOptions}
                 required
               />
             </div>
@@ -317,30 +307,31 @@ export function AdminPanelPage() {
             </button>
           </form>
         );
-      case "netType":
+      case "netType": // Renamed to "network" for consistency
         return (
           <form
             onSubmit={(e) =>
+              // --- 4. UPDATED PAYLOAD & ACTION ---
               handleSubmit(
                 e,
-                addNetType,
-                { name: netTypeData.name },
-                `Net Type "${netTypeData.name}" submitted!`,
-                () => setNetTypeData({ name: "" })
+                addNetwork,
+                { name: networkData.name },
+                `Network "${networkData.name}" submitted!`,
+                () => setNetworkData({ name: "" })
               )
             }
             className="mt-6 space-y-4 p-6 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg"
           >
             <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
-              Add New Net Type
+              Add New Network
             </h3>
             <div>
               <InputField
-                label="Net Type Name"
-                id="netTypeName"
-                value={netTypeData.name}
+                label="Network Name"
+                id="networkName"
+                value={networkData.name}
                 onChange={(e) =>
-                  setNetTypeData({ ...netTypeData, name: e.target.value })
+                  setNetworkData({ ...networkData, name: e.target.value })
                 }
                 required
               />
@@ -350,7 +341,7 @@ export function AdminPanelPage() {
               disabled={isSubmitting}
               className="w-full sm:w-auto px-6 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? "Submitting..." : "Add Net Type"}
+              {isSubmitting ? "Submitting..." : "Add Network"}
             </button>
           </form>
         );
@@ -426,29 +417,29 @@ export function AdminPanelPage() {
             </button>
           </form>
         );
-      case "deleteNetType":
+      case "deleteNetType": // Renamed to "deleteNetwork"
         return (
           <form
             onSubmit={(e) => e.preventDefault()}
             className="mt-6 space-y-4 p-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-lg"
           >
             <h3 className="text-xl font-semibold text-red-800 dark:text-red-200">
-              Delete Net Type
+              Delete Network
             </h3>
             <SelectField
-              label="Select Net Type to Delete"
-              id="delete_nettype_id"
+              label="Select Network to Delete"
+              id="delete_network_id"
               value={itemToDelete}
               onChange={(e) => setItemToDelete(e.target.value)}
-              options={netTypeOptions}
+              options={networkOptions}
               required
             />
             <button
-              onClick={() => handleDelete(deleteNetType, "Net Type")}
+              onClick={() => handleDelete(deleteNetwork, "Network")}
               disabled={isSubmitting || !itemToDelete}
               className="w-full sm:w-auto px-6 py-2 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? "Deleting..." : "Delete Net Type"}
+              {isSubmitting ? "Deleting..." : "Delete Network"}
             </button>
           </form>
         );
@@ -478,9 +469,10 @@ export function AdminPanelPage() {
           Admin Panel
         </h1>
         <p className="text-md text-gray-600 dark:text-gray-400 mt-1">
-          Manage core system entities like Core Sites, Devices, and Net Types.
+          Manage core system entities like Networks, Core Sites, and Devices.
         </p>
       </header>
+
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
         <h2 className="text-2xl font-bold text-gray-700 dark:text-gray-200 mb-4">
           Add Entities
@@ -514,11 +506,12 @@ export function AdminPanelPage() {
                 : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
             }`}
           >
-            Add Net Type
+            Add Network
           </button>
         </div>
         {renderAddSectionForm()}
       </div>
+
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
         <h2 className="text-2xl font-bold text-red-700 dark:text-red-400 mb-4">
           Delete Entities
@@ -552,7 +545,7 @@ export function AdminPanelPage() {
                 : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
             }`}
           >
-            Delete Net Type
+            Delete Network
           </button>
         </div>
         {renderDeleteSectionForm()}

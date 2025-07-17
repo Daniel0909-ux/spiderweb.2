@@ -51,35 +51,61 @@ export const fetchNetworks = createAsyncThunk(
   }
 );
 
+// --- NEW: Add Network Thunk ---
+export const addNetwork = createAsyncThunk(
+  "networks/addNetwork",
+  async (networkData, { dispatch, rejectWithValue }) => {
+    try {
+      // Assuming api service has an `addNetwork` method
+      await api.addNetwork(networkData);
+      // On success, re-fetch the entire list to ensure consistency
+      dispatch(fetchNetworks());
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// --- NEW: Delete Network Thunk ---
+export const deleteNetwork = createAsyncThunk(
+  "networks/deleteNetwork",
+  async (networkId, { dispatch, rejectWithValue }) => {
+    try {
+      // Assuming api service has a `deleteNetwork` method
+      await api.deleteNetwork(networkId);
+      // On success, re-fetch the list
+      dispatch(fetchNetworks());
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 // --- THE SLICE DEFINITION ---
 const networksSlice = createSlice({
   name: "networks",
   initialState,
-  reducers: {}, // No synchronous reducers needed for now
+  reducers: {},
   extraReducers: (builder) => {
-    builder
-      // --- Reducers for Fetching ---
-      .addCase(fetchNetworks.pending, (state) => {
-        state.status = "loading";
-        state.error = null;
-      })
-      .addCase(fetchNetworks.fulfilled, (state, action) => {
-        state.status = "succeeded";
-        // Use the adapter and normalizer to safely set all items
-        networksAdapter.setAll(
-          state,
-          normalizeNetworksApiResponse(action.payload)
-        );
-      })
-      .addCase(fetchNetworks.rejected, (state, action) => {
-        state.status = "failed";
-        state.error = action.payload;
-      })
-      // --- Reducer for Logout ---
-      .addCase(logout.type, () => {
-        // Reset the slice to its initial empty state on logout
-        return initialState;
-      });
+    // --- THIS IS THE FIX: Each .addCase is a separate statement ---
+    builder.addCase(fetchNetworks.pending, (state) => {
+      state.status = "loading";
+      state.error = null;
+    });
+    builder.addCase(fetchNetworks.fulfilled, (state, action) => {
+      state.status = "succeeded";
+      networksAdapter.setAll(
+        state,
+        normalizeNetworksApiResponse(action.payload)
+      );
+    });
+    builder.addCase(fetchNetworks.rejected, (state, action) => {
+      state.status = "failed";
+      state.error = action.payload;
+    });
+    builder.addCase(logout.type, () => {
+      return initialState;
+    });
   },
 });
 

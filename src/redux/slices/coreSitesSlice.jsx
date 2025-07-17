@@ -62,39 +62,63 @@ export const fetchAllCoreSites = createAsyncThunk(
   }
 );
 
+// --- NEW: Add Core Site Thunk ---
+export const addCoreSite = createAsyncThunk(
+  "coreSites/addCoreSite",
+  async (siteData, { dispatch, rejectWithValue }) => {
+    // siteData must include the parent networkId, e.g., { name: 'Site A', network_id: 1 }
+    try {
+      await api.addCoreSite(siteData);
+      // Re-fetch only the sites for the affected network
+      dispatch(fetchCoreSitesForNetwork(siteData.network_id));
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// --- NEW: Delete Core Site Thunk ---
+export const deleteCoreSite = createAsyncThunk(
+  "coreSites/deleteCoreSite",
+  async (payload, { dispatch, rejectWithValue }) => {
+    // Payload must be an object: { siteId: 123, networkId: 1 }
+    const { siteId, networkId } = payload;
+    try {
+      await api.deleteCoreSite(siteId);
+      // Re-fetch the list for the parent network
+      dispatch(fetchCoreSitesForNetwork(networkId));
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 // --- THE SLICE DEFINITION ---
 const coreSitesSlice = createSlice({
   name: "coreSites",
   initialState,
   reducers: {},
   extraReducers: (builder) => {
-    builder
-      // Reducer for the "master" fetch thunk
-      .addCase(fetchAllCoreSites.pending, (state) => {
-        state.status = "loading";
-        state.error = null;
-      })
-      .addCase(fetchAllCoreSites.fulfilled, (state) => {
-        // We only mark as 'succeeded' if no individual fetches are still pending/failed.
-        // A more robust solution could track per-network status. For now, this is ok.
-        state.status = "succeeded";
-      })
-      .addCase(fetchAllCoreSites.rejected, (state, action) => {
-        state.status = "failed";
-        state.error = action.payload;
-      })
-      // Reducer for the INDIVIDUAL network fetch thunk
-      .addCase(fetchCoreSitesForNetwork.fulfilled, (state, action) => {
-        const { networkId, sites } = action.payload;
-        // Add or update the fetched sites in our normalized state
-        coreSitesAdapter.upsertMany(state, sites);
-        // Map the IDs of these sites to their parent network
-        state.sitesByNetworkId[networkId] = sites.map((site) => site.id);
-      })
-      // --- Reducer for Logout ---
-      .addCase(logout.type, () => {
-        return initialState;
-      });
+    // --- THIS IS THE FIX: Each .addCase is a separate statement ---
+    builder.addCase(fetchAllCoreSites.pending, (state) => {
+      state.status = "loading";
+      state.error = null;
+    });
+    builder.addCase(fetchAllCoreSites.fulfilled, (state) => {
+      state.status = "succeeded";
+    });
+    builder.addCase(fetchAllCoreSites.rejected, (state, action) => {
+      state.status = "failed";
+      state.error = action.payload;
+    });
+    builder.addCase(fetchCoreSitesForNetwork.fulfilled, (state, action) => {
+      const { networkId, sites } = action.payload;
+      coreSitesAdapter.upsertMany(state, sites);
+      state.sitesByNetworkId[networkId] = sites.map((site) => site.id);
+    });
+    builder.addCase(logout.type, () => {
+      return initialState;
+    });
   },
 });
 

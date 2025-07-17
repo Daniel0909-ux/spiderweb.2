@@ -5,10 +5,9 @@ import { useMemo, useCallback } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { faker } from "@faker-js/faker";
 
-// --- 1. UPDATED: Redux Imports ---
+// --- Redux Imports (Updated) ---
 import { selectAllSites } from "../redux/slices/sitesSlice";
-import { selectAllTenGigLinks } from "../redux/slices/tenGigLinksSlice";
-// Import from the new coreDevicesSlice
+import { selectAllLinks } from "../redux/slices/linksSlice";
 import { selectAllCoreDevices } from "../redux/slices/coreDevicesSlice";
 import {
   selectFavoriteIds,
@@ -18,38 +17,37 @@ import {
 export function useInterfaceData() {
   const dispatch = useDispatch();
 
-  // --- 2. UPDATED: Use the new selector ---
-  const allSites = useSelector(selectAllSites) || [];
-  const allTenGigLinks = useSelector(selectAllTenGigLinks) || [];
-  // Use the selector for the new slice
+  // --- Selectors using new slices ---
+  const allSites = useSelector(selectAllSites) || []; // These are end-site connections
+  const allLinks = useSelector(selectAllLinks) || []; // These are core-to-core links
   const allDevices = useSelector(selectAllCoreDevices) || [];
   const favoriteIds = useSelector(selectFavoriteIds) || [];
 
-  // This part is correct, as it maps by the device's primary key `id`.
+  // --- Step 2: Create efficient lookup maps (memoized for performance) ---
   const deviceMap = useMemo(
     () => new Map(allDevices.map((d) => [d.id, d])),
     [allDevices]
   );
 
-  // --- 3. UPDATED: deviceFilterOptions to use `name` ---
   const deviceFilterOptions = useMemo(() => {
-    // The device object now has `name` instead of `hostname`.
+    // Use the `name` property from the new device objects
     const deviceNames = allDevices.map((device) => device.name);
     return ["all", ...deviceNames.sort()];
   }, [allDevices]);
 
-  // --- 4. UPDATED: Data transformation logic ---
+  // --- Step 3: Transform, combine, and merge all data (the core logic) ---
   const interfaces = useMemo(() => {
-    // --- A. Transform Site Connections into the common format ---
+    // --- A. Transform Core-to-End-Site Connections ---
+    // The `allSites` slice represents the connections from core devices to end sites.
     const siteConnections = allSites.map((site) => {
       const device = deviceMap.get(site.device_id);
       return {
         id: `site-${site.id}-${site.device_id}`,
-        // Use `device?.name` instead of `device?.hostname`
+        // Use `device.name` instead of `hostname`
         deviceName: device?.name || "Unknown Device",
         interfaceName: `Port ${site.interface_id}`,
         description: `Connection to site: ${site.site_name_english}`,
-        status: "Up",
+        status: "Up", // This might need to come from real data later
         trafficIn: `${faker.number.int({ min: 1, max: 800 })} Mbps`,
         trafficOut: `${faker.number.int({ min: 1, max: 800 })} Mbps`,
         errors: {
@@ -60,47 +58,53 @@ export function useInterfaceData() {
       };
     });
 
-    // --- B. Transform 10-Gigabit Core Links (This part is unchanged as it doesn't use the device list) ---
-    const tenGigCoreLinks = allTenGigLinks.map((link) => {
-      const formattedStatus =
-        link.status.charAt(0).toUpperCase() + link.status.slice(1);
-      const randomLinkType = faker.helpers.arrayElement([
-        "regular",
-        "bundle",
-        "tunneling",
-      ]);
-      return {
-        id: link.id,
-        deviceName: `${link.source} <-> ${link.target}`,
-        interfaceName: `10G Inter-Core Link`,
-        description: `Inter-site trunk (${link.bandwidth || "N/A"})`,
-        status: formattedStatus === "Issue" ? "Down" : formattedStatus,
-        trafficIn: `${faker.number.float({
-          min: 1,
-          max: 9,
-          precision: 0.1,
-        })} Gbps`,
-        trafficOut: `${faker.number.float({
-          min: 1,
-          max: 9,
-          precision: 0.1,
-        })} Gbps`,
-        errors: {
-          in: faker.number.int({ max: 20 }),
-          out: faker.number.int({ max: 15 }),
-        },
-        linkType: randomLinkType,
-      };
-    });
+    // --- B. Transform Core-to-Core Links ---
+    // The `allLinks` slice represents these. We filter for the correct type.
+    const coreToCoreLinks = allLinks
+      .filter((link) => link.type === "core-to-core")
+      .map((link) => {
+        const formattedStatus =
+          link.status.charAt(0).toUpperCase() + link.status.slice(1);
+        const randomLinkType = faker.helpers.arrayElement([
+          "regular",
+          "bundle",
+          "tunneling",
+        ]);
 
-    const allLinks = [...siteConnections, ...tenGigCoreLinks];
+        return {
+          id: link.id,
+          // The source/target on these links are the device names
+          deviceName: `${link.source} <-> ${link.target}`,
+          interfaceName: `10G Inter-Core Link`,
+          description: `Inter-site trunk (${link.bandwidth || "N/A"})`,
+          status: formattedStatus === "Issue" ? "Down" : formattedStatus,
+          trafficIn: `${faker.number.float({
+            min: 1,
+            max: 9,
+            precision: 0.1,
+          })} Gbps`,
+          trafficOut: `${faker.number.float({
+            min: 1,
+            max: 9,
+            precision: 0.1,
+          })} Gbps`,
+          errors: {
+            in: faker.number.int({ max: 20 }),
+            out: faker.number.int({ max: 15 }),
+          },
+          linkType: randomLinkType,
+        };
+      });
 
-    // D. Add the `isFavorite` property to each item
-    return allLinks.map((link) => ({
+    // --- C. Combine the two lists ---
+    const allInterfaceRows = [...siteConnections, ...coreToCoreLinks];
+
+    // --- D. Add the `isFavorite` property to each item ---
+    return allInterfaceRows.map((link) => ({
       ...link,
       isFavorite: favoriteIds.includes(link.id),
     }));
-  }, [allSites, allTenGigLinks, deviceMap, favoriteIds]);
+  }, [allSites, allLinks, deviceMap, favoriteIds]); // Updated dependencies
 
   // --- Step 4: Create a stable function to handle user actions (Unchanged) ---
   const handleToggleFavorite = useCallback(

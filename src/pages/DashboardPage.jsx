@@ -29,7 +29,7 @@ import { useRelatedDevices } from "../hooks/useRelatedDevices";
 // 1. Import from the new coreDevicesSlice instead of the old devicesSlice
 import { selectAllCoreDevices } from "../redux/slices/coreDevicesSlice";
 import { selectAllSites } from "../redux/slices/sitesSlice";
-import { selectAllTenGigLinks } from "../redux/slices/tenGigLinksSlice";
+import { selectLinksByNetworkId } from "../redux/slices/linksSlice";
 
 // This helper component can be used by other pages like FavoritesPage
 function StatusIndicator({ status }) {
@@ -51,42 +51,44 @@ function StatusIndicator({ status }) {
   );
 }
 
-// This component now correctly receives the theme prop to pass down.
 function NodeDetailView({ chartType, theme }) {
-  const { nodeId: deviceName, zoneId } = useParams(); // URL param is the device name
+  const { nodeId: deviceName, zoneId: coreSiteName } = useParams();
 
-  // 2. Use the new selector to get all core devices
   const allDevices = useSelector(selectAllCoreDevices);
-  const allSites = useSelector(selectAllSites);
-  const allLinks = useSelector(selectAllTenGigLinks);
-  const otherDevicesInZone = useRelatedDevices(deviceName, zoneId);
+  const allEndSites = useSelector(selectAllSites);
+  const otherDevicesInZone = useRelatedDevices(deviceName, coreSiteName);
+
+  // --- THIS IS THE FIX ---
+  // 1. Determine the network ID based on the chart type.
+  const networkId = chartType === "P" ? 2 : 1;
+  // 2. Use the correct, more efficient selector to get only the links for this specific network.
+  const linksForNetwork = useSelector((state) =>
+    selectLinksByNetworkId(state, networkId)
+  );
 
   const linksForTable = React.useMemo(() => {
-    if (!deviceName || !allDevices.length || !allLinks.length) {
+    // 3. The guard clause now checks `linksForNetwork`.
+    if (!deviceName || !linksForNetwork || !allDevices.length) {
       return [];
     }
-    const typeId = chartType === "P" ? 2 : 1;
-    const allCoreLinksForChart = allLinks.filter(
-      (link) => link.network_type_id === typeId
-    );
 
-    // 3. Update logic to use `d.name` which comes from the new API, instead of `d.hostname`
     const currentDevice = allDevices.find((d) => d.name === deviceName);
     if (!currentDevice) return [];
 
     const deviceMapByName = new Map(allDevices.map((d) => [d.name, d]));
 
-    const interCoreLinks = allCoreLinksForChart
+    // 4. The filtering logic now operates on the pre-filtered `linksForNetwork` array.
+    const interCoreLinks = linksForNetwork
       .filter(
-        (link) => link.source === deviceName || link.target === deviceName
+        (link) =>
+          link.type === "core-to-core" && // Still good to be explicit with type
+          (link.source === deviceName || link.target === deviceName)
       )
       .map((link) => {
         const otherDeviceName =
           link.source === deviceName ? link.target : link.source;
         const otherDevice = deviceMapByName.get(otherDeviceName);
         let linkType = "inter-core-different-site";
-
-        // 4. Update logic to use `core_site_id` which is added by our new slice
         if (
           otherDevice &&
           otherDevice.core_site_id === currentDevice.core_site_id
@@ -107,7 +109,7 @@ function NodeDetailView({ chartType, theme }) {
         };
       });
 
-    const coreToSiteLinks = allSites
+    const coreToEndSiteLinks = allEndSites
       .filter((site) => site.device_id === currentDevice.id)
       .map((site) => ({
         id: `site-link-${site.id}`,
@@ -124,14 +126,15 @@ function NodeDetailView({ chartType, theme }) {
         },
       }));
 
-    return [...interCoreLinks, ...coreToSiteLinks];
-  }, [deviceName, chartType, allDevices, allSites, allLinks]);
+    return [...interCoreLinks, ...coreToEndSiteLinks];
+    // 5. Update the dependency array to use `linksForNetwork`.
+  }, [deviceName, allDevices, allEndSites, linksForNetwork]);
 
   return (
     <div className="p-1">
       <LinkTable
         coreDeviceName={deviceName}
-        coreSiteName={zoneId}
+        coreSiteName={coreSiteName}
         linksData={linksForTable}
         otherDevicesInZone={otherDevicesInZone}
         theme={theme}
